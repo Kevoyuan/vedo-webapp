@@ -43,7 +43,7 @@ const theme = createTheme({
 })
 
 function App() {
-  const [meshData, setMeshData] = useState<any>(null)
+  const [meshData, setMeshData] = useState<MeshData | null>(null)
   const [loading, setLoading] = useState(false)
 
   return (
@@ -102,7 +102,7 @@ function App() {
 
           {/* Main Viewer - Premium canvas area */}
           <section className="flex-1 relative">
-            <MeshViewer meshData={meshData} loading={loading} />
+            <MeshViewer meshData={meshData} />
           </section>
         </main>
       </div>
