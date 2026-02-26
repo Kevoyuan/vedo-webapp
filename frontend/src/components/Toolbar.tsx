@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Group, ActionIcon, Tooltip } from '@mantine/core'
+import { Button, Group, ActionIcon, Tooltip, Text } from '@mantine/core'
 import { 
   ArrowClockwise, 
   ArrowCounterClockwise, 
