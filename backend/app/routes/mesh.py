@@ -95,7 +95,7 @@ def get_file_size(file_path: Path) -> int:
     """Get file size in bytes"""
     try:
         return os.path.getsize(file_path)
-    except:
+    except OSError:
         return 0
 
 
@@ -108,10 +108,10 @@ def cleanup_mesh(mesh_id: str) -> None:
         if file_path and os.path.exists(file_path):
             try:
                 os.remove(file_path)
-            except Exception:
+            except OSError:
                 pass
-        # Remove from store
-        del mesh_store[mesh_id]
+        # Remove from store (use dict.pop to avoid iteration issues)
+        mesh_store.pop(mesh_id, None)
 
 
 # ============================================================================
@@ -123,7 +123,7 @@ async def import_mesh(file: UploadFile = File(...)):
     """Import a mesh file (STL, OBJ, PLY, VTK, WRL, OFF supported)"""
     # Validate file extension
     ext = Path(file.filename).suffix.lower().lstrip('.')
-    if ext not in EXPORT_FORMATS and ext not in ['stl', 'obj', 'ply', 'vtk', 'wrl', 'off']:
+    if ext not in EXPORT_FORMATS:
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported file format: {ext}. Supported: {', '.join(EXPORT_FORMATS)}"
@@ -154,8 +154,8 @@ async def import_mesh(file: UploadFile = File(...)):
             filename=file.filename,
             n_points=mesh.npoints,
             n_cells=mesh.ncells,
-            volume=float(mesh.volume()) if mesh.volume() else None,
-            area=float(mesh.area()) if mesh.area() else None,
+            volume=float(mesh.volume()) if mesh.volume() is not None else None,
+            area=float(mesh.area()) if mesh.area() is not None else None,
             bounding_box=list(bounds),
         )
         
@@ -197,8 +197,8 @@ async def get_mesh_info(mesh_id: str):
             filename=mesh_data["filename"],
             n_points=mesh.npoints,
             n_cells=mesh.ncells,
-            volume=float(mesh.volume()) if mesh.volume() else None,
-            area=float(mesh.area()) if mesh.area() else None,
+            volume=float(mesh.volume()) if mesh.volume() is not None else None,
+            area=float(mesh.area()) if mesh.area() is not None else None,
             bounding_box=list(bounds),
             center_of_mass=list(mesh.centerOfMass()) if hasattr(mesh, 'centerOfMass') else None,
             file_size=get_file_size(Path(file_path)),
@@ -226,8 +226,8 @@ async def analyze_mesh(mesh_id: str, compute_curvature: bool = False):
             id=mesh_id,
             n_points=mesh.npoints,
             n_cells=mesh.ncells,
-            volume=float(mesh.volume()) if mesh.volume() else None,
-            area=float(mesh.area()) if mesh.area() else None,
+            volume=float(mesh.volume()) if mesh.volume() is not None else None,
+            area=float(mesh.area()) if mesh.area() is not None else None,
             bounding_box=list(bounds),
             center_of_mass=list(mesh.centerOfMass()) if hasattr(mesh, 'centerOfMass') else None,
         )
