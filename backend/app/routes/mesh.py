@@ -33,7 +33,7 @@ MESH_DIR = Path("/tmp/vedo_meshes")
 MESH_DIR.mkdir(exist_ok=True)
 
 # Supported export formats
-EXPORT_FORMATS = ["stl", "obj", "ply", "vtk", "wrl", "off"]
+EXPORT_FORMATS = ["stl", "obj", "ply", "vtk", "wrl", "off", "gltf"]
 
 # In-memory mesh storage with metadata
 mesh_store: Dict[str, Dict[str, Any]] = {}
@@ -598,6 +598,86 @@ async def visualize_mesh_buffer(mesh_id: str):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get buffer data: {str(e)}")
+
+
+class ExportRequest(BaseModel):
+    """Mesh export request"""
+    format: str = Field(..., description="Export format: stl, obj, ply, vtk")
+    binary: bool = Field(default=True, description="Binary format for STL")
+
+
+@router.post("/{mesh_id}/export")
+async def export_mesh(mesh_id: str, request: ExportRequest):
+    """
+    Export a mesh to specified format
+    Supports STL, OBJ, PLY, VTK formats
+    """
+    if mesh_id not in mesh_store:
+        raise HTTPException(status_code=404, detail="Mesh not found")
+    
+    format_lower = request.format.lower()
+    if format_lower not in EXPORT_FORMATS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported format: {request.format}. Supported: {', '.join(EXPORT_FORMATS)}"
+        )
+    
+    vedo = get_vedo()
+    mesh_data = mesh_store[mesh_id]
+    original_path = Path(mesh_data["path"])
+    
+    try:
+        loop = asyncio.get_event_loop()
+        
+        # Load mesh in thread pool
+        mesh = await loop.run_in_executor(_executor, vedo.load, str(original_path))
+        
+        # Create temp export file
+        export_filename = f"{mesh_id}_export.{format_lower}"
+        export_path = MESH_DIR / export_filename
+        
+        # Export in thread pool
+        def do_export():
+            if format_lower == "stl":
+                mesh.write(str(export_path), binary=request.binary)
+            else:
+                mesh.write(str(export_path))
+            return export_path
+        
+        export_path = await loop.run_in_executor(_executor, do_export)
+        
+        # Read the exported file
+        with open(export_path, "rb") as f:
+            file_content = f.read()
+        
+        # Clean up temp export file
+        try:
+            export_path.unlink()
+        except OSError:
+            pass
+        
+        # Determine content type and extension
+        content_types = {
+            "stl": "model/stl",
+            "obj": "model/obj",
+            "ply": "application/octet-stream",
+            "vtk": "application/octet-stream",
+            "wrl": "model/vrml",
+            "off": "application/octet-stream",
+        }
+        
+        return Response(
+            content=file_content,
+            media_type=content_types.get(format_lower, "application/octet-stream"),
+            headers={
+                "Content-Disposition": f"attachment; filename={mesh_data['filename'].rsplit('.', 1)[0]}.{format_lower}"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
 
 @router.delete("/{mesh_id}")

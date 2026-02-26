@@ -15,7 +15,8 @@ import {
   CircleDashed,
   Split,
   Merge,
-  ChartPie
+  ChartPie,
+  Download
 } from '@phosphor-icons/react'
 import axios from 'axios'
 
@@ -151,6 +152,12 @@ function ToolbarComponent({ meshId, onUpdate, onAnalysisResult }: Props) {
   const [slicePosition, setSlicePosition] = useState(0)
   const [booleanMeshId, setBooleanMeshId] = useState('')
   const [availableMeshes, setAvailableMeshes] = useState<{value: string, label: string}[]>([])
+  
+  // Export state
+  const [exportModalOpen, setExportModalOpen] = useState(false)
+  const [exportFormat, setExportFormat] = useState('stl')
+  const [exportBinary, setExportBinary] = useState(true)
+  const [exporting, setExporting] = useState(false)
   
   // Ref to track pending requests for debouncing
   const pendingRequestRef = useRef<string | null>(null)
@@ -382,6 +389,52 @@ function ToolbarComponent({ meshId, onUpdate, onAnalysisResult }: Props) {
     setBooleanModalOpen(true)
   }, [fetchAvailableMeshes])
 
+  // Export mesh handler
+  const handleExport = useCallback(async () => {
+    setExporting(true)
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/mesh/${meshId}/export`,
+        {
+          format: exportFormat,
+          binary: exportBinary
+        },
+        {
+          responseType: 'blob'
+        }
+      )
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      
+      // Get filename from content-disposition header or generate one
+      const contentDisposition = response.headers['content-disposition']
+      let filename = `mesh_${meshId}.${exportFormat}`
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+        if (filenameMatch) {
+          filename = filenameMatch[1].replace(/['"]/g, '')
+        }
+      }
+      
+      link.setAttribute('download', filename)
+      document.body.appendChild(link)
+      link.click()
+      
+      // Cleanup
+      link.remove()
+      window.URL.revokeObjectURL(url)
+      
+      setExportModalOpen(false)
+    } catch (err) {
+      console.error('Export error:', err)
+    } finally {
+      setExporting(false)
+    }
+  }, [meshId, exportFormat, exportBinary])
+
   return (
     <div className="glass-light rounded-xl p-4 animate-scale-in">
       {/* Transform Mode Selector */}
@@ -512,6 +565,24 @@ function ToolbarComponent({ meshId, onUpdate, onAnalysisResult }: Props) {
         />
       </div>
 
+      <Divider my="sm" color="white/5" />
+
+      {/* Export */}
+      <Text size="sm" fw={600} mb="sm">Export</Text>
+      
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="xs"
+          variant="light"
+          color="cyan"
+          leftSection={<Download size={14} />}
+          onClick={() => setExportModalOpen(true)}
+          className="transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+        >
+          Export Mesh
+        </Button>
+      </div>
+
       {/* Slicing Modal */}
       <Modal
         opened={sliceModalOpen}
@@ -592,6 +663,61 @@ function ToolbarComponent({ meshId, onUpdate, onAnalysisResult }: Props) {
               Subtract
             </Button>
           </Group>
+        </Stack>
+      </Modal>
+
+      {/* Export Modal */}
+      <Modal
+        opened={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        title="Export Mesh"
+        centered
+        styles={{
+          content: { background: '#1A1B1E' },
+          header: { background: '#1A1B1E' }
+        }}
+      >
+        <Stack>
+          <Select
+            label="Format"
+            value={exportFormat}
+            onChange={(v) => setExportFormat(v || 'stl')}
+            data={[
+              { value: 'stl', label: 'STL (Stereo Lithography)' },
+              { value: 'obj', label: 'OBJ (Wavefront)' },
+              { value: 'ply', label: 'PLY (Polygon File)' },
+              { value: 'vtk', label: 'VTK (Visualization Toolkit)' },
+              { value: 'gltf', label: 'GLTF (GL Transmission Format)' },
+            ]}
+          />
+          
+          {exportFormat === 'stl' && (
+            <div>
+              <Text size="sm" fw={500} mb="xs">Format Options</Text>
+              <SegmentedControl
+                size="xs"
+                value={exportBinary ? 'binary' : 'ascii'}
+                onChange={(v) => setExportBinary(v === 'binary')}
+                data={[
+                  { label: 'Binary', value: 'binary' },
+                  { label: 'ASCII', value: 'ascii' },
+                ]}
+                fullWidth
+              />
+              <Text size="xs" c="dimmed" mt={4}>
+                Binary is smaller and faster. ASCII is human-readable.
+              </Text>
+            </div>
+          )}
+          
+          <Button 
+            onClick={handleExport}
+            loading={exporting}
+            color="cyan"
+            leftSection={<Download size={16} />}
+          >
+            Download
+          </Button>
         </Stack>
       </Modal>
     </div>
