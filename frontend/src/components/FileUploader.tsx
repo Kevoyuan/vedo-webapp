@@ -6,9 +6,41 @@ import axios, { AxiosError } from 'axios'
 // API base URL - could be moved to environment config
 const API_BASE_URL = 'http://localhost:8000'
 
-// Supported file extensions
-const SUPPORTED_EXTENSIONS = ['.stl', '.obj', '.vtk', '.ply', '.3ds']
-const SUPPORTED_FORMATS = ['STL', 'OBJ', 'VTK', 'PLY', '3DS']
+// Supported file extensions - all formats supported by Vedo backend
+const SUPPORTED_EXTENSIONS = [
+  '.stl', '.obj', '.vtk', '.ply', '.3ds',
+  '.gltf', '.glb', '.3mf', '.off', '.wrl', '.xyz'
+]
+
+// Human-readable format names
+const SUPPORTED_FORMATS = [
+  'STL', 'OBJ', 'VTK', 'PLY', '3DS',
+  'GLTF', 'GLB', '3MF', 'OFF', 'WRL', 'XYZ'
+]
+
+// Format descriptions for tooltips
+const FORMAT_DESCRIPTIONS: Record<string, string> = {
+  'STL': 'Stereolithography - common for 3D printing',
+  'OBJ': 'Wavefront OBJ - universal 3D format',
+  'VTK': 'Visualization Toolkit',
+  'PLY': 'Polygon File Format - supports colors',
+  '3DS': '3D Studio Max',
+  'GLTF': 'GL Transmission Format - web-ready',
+  'GLB': 'GL Binary - web-ready 3D',
+  '3MF': '3D Manufacturing Format - 3D printing',
+  'OFF': 'Object File Format',
+  'WRL': 'VRML - Virtual Reality',
+  'XYZ': 'XYZ Point Cloud',
+}
+
+/**
+ * Detect file format from filename extension
+ */
+function detectFormat(filename: string): string {
+  const ext = filename.toLowerCase().slice(filename.lastIndexOf('.'))
+  const idx = SUPPORTED_EXTENSIONS.indexOf(ext)
+  return idx >= 0 ? SUPPORTED_FORMATS[idx] : 'Unknown'
+}
 
 interface Props {
   onUpload: (data: unknown) => void
@@ -38,6 +70,7 @@ function FileUploaderComponent({
 }: Props) {
   const [dragActive, setDragActive] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [detectedFormat, setDetectedFormat] = useState<string | null>(null)
   
   // Refs for cleanup
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -150,8 +183,15 @@ function FileUploaderComponent({
     e.stopPropagation()
     if (e.type === 'dragenter' || e.type === 'dragover') {
       setDragActive(true)
+      // Detect format on drag enter
+      const file = e.dataTransfer?.files?.[0]
+      if (file) {
+        const format = detectFormat(file.name)
+        setDetectedFormat(FORMAT_DESCRIPTIONS[format] || format)
+      }
     } else if (e.type === 'dragleave') {
       setDragActive(false)
+      setDetectedFormat(null)
     }
   }, [])
 
@@ -159,6 +199,7 @@ function FileUploaderComponent({
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
+    setDetectedFormat(null)
     
     const file = e.dataTransfer.files[0]
     if (file) {
@@ -215,7 +256,9 @@ function FileUploaderComponent({
         <p className="text-sm text-gray-400 mb-1">
           {dragActive ? 'Drop your file here' : 'Drag & drop mesh file'}
         </p>
-        <p className="text-xs text-gray-600 mb-4">or click to browse</p>
+        <p className="text-xs text-gray-600 mb-4">
+          {detectedFormat || 'or click to browse'}
+        </p>
         
         <label className="block">
           <input 

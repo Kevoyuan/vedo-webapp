@@ -32,8 +32,9 @@ router = APIRouter()
 MESH_DIR = Path("/tmp/vedo_meshes")
 MESH_DIR.mkdir(exist_ok=True)
 
-# Supported export formats
-EXPORT_FORMATS = ["stl", "obj", "ply", "vtk", "wrl", "off", "gltf"]
+# Supported import/export formats
+# Import: STL, OBJ, PLY, VTK, GLTF/GLB, 3MF, OFF, WRL, XYZ
+EXPORT_FORMATS = ["stl", "obj", "ply", "vtk", "gltf", "glb", "3mf", "off", "wrl", "xyz"]
 
 # In-memory mesh storage with metadata
 mesh_store: Dict[str, Dict[str, Any]] = {}
@@ -155,7 +156,8 @@ def _get_or_compute_cache(mesh_id: str, compute_fn, *args):
 @router.post("/import", response_model=MeshInfo, status_code=201)
 async def import_mesh(file: UploadFile = File(...)):
     """
-    Import a mesh file (STL, OBJ, PLY, VTK, WRL, OFF supported)
+    Import a mesh file
+    Supported formats: STL, OBJ, PLY, VTK, GLTF/GLB, 3MF, OFF, WRL, XYZ
     Uses async file handling for better performance
     """
     # Validate file extension
