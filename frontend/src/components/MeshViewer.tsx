@@ -15,12 +15,24 @@ import * as THREE from 'three'
 import { motion } from 'framer-motion'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { ViewerSettings, cameraPresets, Measurement, Annotation } from '../types/viewer'
+import { MeshData } from '../types'
+
+interface MeshItem {
+  id: string
+  vertices: number[][]
+  faces: number[][]
+  visible: boolean
+  filename?: string
+}
 
 interface Props {
-  meshData: any
+  meshData: MeshData | null
   loading?: boolean
   settings: ViewerSettings
   onSettingsChange: (settings: Partial<ViewerSettings>) => void
+  // Multi-mesh support
+  meshes?: MeshItem[]
+  selectedMeshId?: string | null
 }
 
 // Color map functions
@@ -61,7 +73,13 @@ function getColorFromMap(value: number, mapType: string, min: number, max: numbe
   return c1.lerp(c2, t)
 }
 
-function Mesh({ vertices, faces, settings }: { vertices: number[][]; faces: number[][]; settings: ViewerSettings }) {
+function Mesh({ vertices, faces, settings, visible = true, isSelected = false }: { 
+  vertices: number[][]; 
+  faces: number[][]; 
+  settings: ViewerSettings
+  visible?: boolean
+  isSelected?: boolean
+}) {
   const meshRef = useRef<THREE.Mesh>(null)
   
   const geometry = useMemo(() => {
@@ -127,15 +145,129 @@ function Mesh({ vertices, faces, settings }: { vertices: number[][]; faces: numb
     }
   }
 
-  if (!geometry) return null
+  if (!geometry || !visible) return null
 
   return (
-    <Center>
-      <mesh ref={meshRef} geometry={geometry}>
+    <mesh ref <Center>
+     ={meshRef} geometry={geometry}>
         {getMaterial()}
+        {/* Selection outline effect */}
+        {isSelected && (
+          <meshBasicMaterial 
+            color="#00d4ff" 
+            wireframe 
+            transparent 
+            opacity={0.3}
+          />
+        )}
       </mesh>
     </Center>
   )
+}
+
+// Multi-mesh scene component
+function MultiMeshScene({ 
+  meshes, 
+  settings, 
+  onAddMeasurement,
+  selectedMeshId 
+}: { 
+  meshes: MeshItem[]
+  settings: ViewerSettings
+  onAddMeasurement: (m: Measurement) => void
+  selectedMeshId?: string | null
+}) {
+  const takeScreenshot = useScreenshot()
+  
+  useEffect(() => {
+    (window as any).vedoTakeScreenshot = takeScreenshot
+  }, [takeScreenshot])
+  
+  const preset = settings.cameraPreset
+  const cameraConfig = useMemo(() => {
+    return cameraPresets[preset] || cameraPresets.free
+  }, [preset])
+
+  return (
+    <>
+      <color attach="background" args={['#0a0a0b']} />
+      
+      {/* Lighting */}
+      <ambientLight intensity={settings.ambientIntensity} />
+      <directionalLight 
+        position={settings.directionalPosition} 
+        intensity={settings.directionalIntensity} 
+        castShadow={settings.enableShadows}
+      />
+      <directionalLight 
+        position={[-8, -5, -5]} 
+        intensity={0.4} 
+        color="#4de7ff" 
+      />
+      <pointLight 
+        position={settings.pointPosition} 
+        intensity={settings.pointIntensity} 
+        color="#00d4ff" 
+      />
+      
+      {/* Grid */}
+      {settings.showGrid && (
+        <Grid 
+          infiniteGrid 
+          cellSize={0.5} 
+          sectionSize={2} 
+          fadeDistance={40}
+          cellColor="#1a1a1d"
+          sectionColor="#252528"
+        />
+      )}
+      
+      {/* Axes */}
+      {settings.showAxes && (
+        <axesHelper args={[5]} />
+      )}
+      
+      {/* Render all meshes */}
+      {meshes.map((mesh) => (
+        <Mesh 
+          key={mesh.id}
+          vertices={mesh.vertices} 
+          faces={mesh.faces}
+          settings={settings}
+          visible={mesh.visible}
+          isSelected={selectedMeshId === mesh.id}
+        />
+      ))}
+      
+      {/* Measurement Tools */}
+      <MeasurementPoints 
+        settings={settings}
+        onAddMeasurement={onAddMeasurement}
+      />
+      <MeasurementLabels measurements={settings.measurements} />
+      
+      {/* Annotations */}
+      <Annotations annotations={settings.annotations} />
+      
+      <Environment preset="city" />
+      <OrbitControls 
+        makeDefault 
+        enableDamping
+        dampingFactor={0.05}
+        rotateSpeed={0.5}
+        zoomSpeed={0.8}
+        minDistance={1}
+        maxDistance={20}
+        enablePan={true}
+        enableZoom={true}
+        enableRotate={true}
+        touches={{
+          ONE: THREE.TOUCH.ROTATE,
+          TWO: THREE.TOUCH.DOLLY_PAN
+        }}
+      </>
+    )
+  }
 }
 
 // Measurement Points Component
@@ -528,6 +660,14 @@ function SceneContent({
         zoomSpeed={0.8}
         minDistance={1}
         maxDistance={20}
+        // Touch gesture support
+        enablePan={true}
+        enableZoom={true}
+        enableRotate={true}
+        touches={{
+          ONE: THREE.TOUCH.ROTATE,
+          TWO: THREE.TOUCH.DOLLY_PAN
+        }}
       />
     </>
   )
@@ -574,9 +714,9 @@ export default function MeshViewer({ meshData, loading, settings, onSettingsChan
         />
       </Canvas>
       
-      {/* Viewer controls hint */}
+      {/* Viewer controls hint - desktop only */}
       <motion.div 
-        className="absolute bottom-4 left-4 glass-light rounded-lg px-3 py-2"
+        className="absolute bottom-4 left-4 glass-light rounded-lg px-3 py-2 hide-mobile"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
@@ -584,6 +724,16 @@ export default function MeshViewer({ meshData, loading, settings, onSettingsChan
         <p className="text-xs text-gray-500">
           <span className="text-gray-400">Drag</span> to rotate • <span className="text-gray-400">Scroll</span> to zoom • <span className="text-gray-400">Right-click</span> to pan
         </p>
+      </motion.div>
+      
+      {/* Touch hints - mobile only */}
+      <motion.div 
+        className="touch-hint visible md:hidden"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 1 }}
+      >
+        <span>1 finger: rotate</span> • <span>2 fingers: zoom/pan</span>
       </motion.div>
     </>
   )
