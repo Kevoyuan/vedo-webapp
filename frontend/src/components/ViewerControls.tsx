@@ -667,9 +667,9 @@ export default function ViewerControls({
 
           <Divider color="white/5" />
 
-          {/* FXAA */}
+          {/* SMAA */}
           <EffectToggle
-            label="Anti-Aliasing (FXAA)"
+            label="Anti-Aliasing (SMAA)"
             enabled={settings.postProcessing.fxaa.enabled}
             onToggle={() => onSettingsChange({
               postProcessing: {

@@ -5,8 +5,7 @@ import {
   Bloom,
   DepthOfField,
   N8AO,
-  SSAO,
-  FXAA,
+  SMAA,
   ToneMapping
 } from '@react-three/postprocessing'
 import { BlendFunction, ToneMappingMode } from 'postprocessing'
@@ -78,9 +77,9 @@ export default function PostProcessing({ settings }: PostProcessingProps) {
         />
       )}
 
-      {/* FXAA Anti-aliasing */}
+      {/* SMAA Anti-aliasing */}
       {fxaa.enabled && (
-        <FXAA />
+        <SMAA />
       )}
 
       {/* Tone Mapping */}
