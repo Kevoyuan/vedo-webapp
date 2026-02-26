@@ -1,27 +1,64 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, memo, useRef, useEffect } from 'react'
 import { Button } from '@mantine/core'
-import { Upload, File } from '@phosphor-icons/react'
+import { Upload } from '@phosphor-icons/react'
 import axios from 'axios'
 
+// API base URL - could be moved to environment config
+const API_BASE_URL = 'http://localhost:8000'
+
+// Supported file extensions
+const SUPPORTED_EXTENSIONS = ['.stl', '.obj', '.vtk', '.ply', '.3ds']
+const SUPPORTED_FORMATS = ['STL', 'OBJ', 'VTK', 'PLY', '3DS']
+
 interface Props {
-  onUpload: (data: any) => void
+  onUpload: (data: unknown) => void
   loading: boolean
-  setLoading: (v: boolean) => void
+  setLoading: (value: boolean | ((prev: boolean) => boolean)) => void
 }
 
-export default function FileUploader({ onUpload, loading, setLoading }: Props) {
+/**
+ * FileUploader Component
+ * Handles drag-and-drop and click-to-upload functionality
+ * Optimized with memoization
+ */
+function FileUploaderComponent({ onUpload, loading, setLoading }: Props) {
   const [dragActive, setDragActive] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  
+  // Refs for cleanup
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFile = useCallback(async (file: File) => {
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
+
+  /**
+   * Upload file to server - with abort support
+   */
+  const uploadFile = useCallback(async (file: File) => {
+    // Cancel any existing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    
+    abortControllerRef.current = new AbortController()
+    
     setLoading(true)
     setUploadProgress(0)
+    
     try {
       const formData = new FormData()
       formData.append('file', file)
       
-      const { data } = await axios.post('http://localhost:8000/mesh/import', formData, {
+      const { data } = await axios.post(`${API_BASE_URL}/mesh/import`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        signal: abortControllerRef.current.signal,
         onUploadProgress: (progressEvent) => {
           const progress = progressEvent.total 
             ? Math.round((progressEvent.loaded * 100) / progressEvent.total)
@@ -32,14 +69,37 @@ export default function FileUploader({ onUpload, loading, setLoading }: Props) {
       
       onUpload(data)
     } catch (err) {
-      console.error(err)
-      alert('Failed to upload mesh')
+      // Don't show error for aborted requests
+      if (!axios.isCancel(err)) {
+        console.error('Upload error:', err)
+        alert('Failed to upload mesh')
+      }
     } finally {
       setLoading(false)
       setUploadProgress(0)
     }
   }, [onUpload, setLoading])
 
+  /**
+   * Validate file extension
+   */
+  const isValidFile = useCallback((file: File): boolean => {
+    const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'))
+    return SUPPORTED_EXTENSIONS.includes(ext)
+  }, [])
+
+  /**
+   * Handle file selection - validates and uploads
+   */
+  const handleFile = useCallback((file: File) => {
+    if (!isValidFile(file)) {
+      alert(`Invalid file format. Supported: ${SUPPORTED_FORMATS.join(', ')}`)
+      return
+    }
+    uploadFile(file)
+  }, [isValidFile, uploadFile])
+
+  // Drag event handlers - memoized
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -56,8 +116,22 @@ export default function FileUploader({ onUpload, loading, setLoading }: Props) {
     setDragActive(false)
     
     const file = e.dataTransfer.files[0]
-    if (file) handleFile(file)
+    if (file) {
+      handleFile(file)
+    }
   }, [handleFile])
+
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      handleFile(file)
+    }
+  }, [handleFile])
+
+  // Memoize the file input click handler
+  const handleClick = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
 
   return (
     <div 
@@ -100,13 +174,11 @@ export default function FileUploader({ onUpload, loading, setLoading }: Props) {
         
         <label className="block">
           <input 
+            ref={fileInputRef}
             type="file" 
-            accept=".stl,.obj,.vtk,.ply,.3ds"
+            accept={SUPPORTED_EXTENSIONS.join(',')}
             className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) handleFile(file)
-            }}
+            onChange={handleInputChange}
           />
           <Button 
             component="span" 
@@ -146,7 +218,7 @@ export default function FileUploader({ onUpload, loading, setLoading }: Props) {
         <div className="mt-5 pt-4 border-t border-white/5">
           <p className="text-xs text-gray-600 mb-2">Supported formats</p>
           <div className="flex flex-wrap justify-center gap-1.5">
-            {['STL', 'OBJ', 'VTK', 'PLY', '3DS'].map((ext) => (
+            {SUPPORTED_FORMATS.map((ext) => (
               <span 
                 key={ext}
                 className="px-2 py-0.5 text-[10px] bg-white/[0.03] text-gray-500 rounded"
@@ -160,3 +232,15 @@ export default function FileUploader({ onUpload, loading, setLoading }: Props) {
     </div>
   )
 }
+
+// Memoize component to prevent unnecessary re-renders
+const FileUploader = memo(FileUploaderComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.loading === nextProps.loading &&
+    prevProps.onUpload === nextProps.onUpload
+  )
+})
+
+FileUploader.displayName = 'FileUploader'
+
+export default FileUploader

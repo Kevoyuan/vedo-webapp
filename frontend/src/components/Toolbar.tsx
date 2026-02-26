@@ -1,19 +1,31 @@
-import { useState } from 'react'
-import { Button, Group, ActionIcon, Tooltip, Text, SegmentedControl, Divider } from '@mantine/core'
+import { useState, memo, useCallback, useRef, useEffect } from 'react'
+import { Button, Group, ActionIcon, Tooltip, Text, SegmentedControl, Divider, Select, Modal, Stack, NumberInput } from '@mantine/core'
 import { 
   ArrowClockwise, 
   ArrowCounterClockwise, 
   MagnifyingPlus, 
   MagnifyingMinus,
-  Wrench,
   ArrowsOut,
-  Rotate
+  Rotate,
+  Scissors,
+  Cubes,
+  ArrowsIn,
+  Waveform,
+  ChartLine,
+  CircleDashed,
+  Split,
+  Merge,
+  ChartPie
 } from '@phosphor-icons/react'
 import axios from 'axios'
 
+// API base URL - could be moved to environment config
+const API_BASE_URL = 'http://localhost:8000'
+
 interface Props {
   meshId: string
-  onUpdate: (data: any) => void
+  onUpdate: (data: unknown) => void
+  onAnalysisResult?: (result: unknown) => void
 }
 
 interface ToolButtonProps {
@@ -22,9 +34,13 @@ interface ToolButtonProps {
   onClick: () => void
   loading?: boolean
   accent?: boolean
+  disabled?: boolean
 }
 
-function ToolButton({ icon, label, onClick, loading, accent }: ToolButtonProps) {
+/**
+ * Tool button component - memoized for performance
+ */
+const ToolButton = memo(function ToolButton({ icon, label, onClick, loading, accent, disabled }: ToolButtonProps) {
   return (
     <Tooltip label={label} position="top" withArrow>
       <ActionIcon 
@@ -34,7 +50,8 @@ function ToolButton({ icon, label, onClick, loading, accent }: ToolButtonProps) 
         radius="md"
         onClick={onClick}
         loading={loading}
-        className="transition-all duration-200 hover:scale-105 active:scale-95"
+        disabled={disabled}
+        className="transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
         styles={{
           root: accent ? {
             background: 'rgba(0, 212, 255, 0.15)',
@@ -49,23 +66,34 @@ function ToolButton({ icon, label, onClick, loading, accent }: ToolButtonProps) 
       </ActionIcon>
     </Tooltip>
   )
-}
+})
+
+ToolButton.displayName = 'ToolButton'
 
 interface FixButtonProps {
   label: string
   onClick: () => void
   loading?: boolean
-  variant?: 'fill-holes' | 'smooth' | 'decimate'
+  variant?: 'fill-holes' | 'smooth' | 'decimate' | 'slice' | 'boolean' | 'curvature' | 'quality' | 'split' | 'merge'
 }
 
-function FixButton({ label, onClick, loading, variant = 'fill-holes' }: FixButtonProps) {
-  const colors: Record<string, { bg: string; border: string; text: string }> = {
-    'fill-holes': { bg: 'rgba(34, 197, 94, 0.1)', border: 'rgba(34, 197, 94, 0.2)', text: 'text-emerald-400' },
-    'smooth': { bg: 'rgba(168, 85, 247, 0.1)', border: 'rgba(168, 85, 247, 0.2)', text: 'text-purple-400' },
-    'decimate': { bg: 'rgba(249, 115, 22, 0.1)', border: 'rgba(249, 115, 22, 0.2)', text: 'text-orange-400' },
-  }
-  
-  const style = colors[variant]
+const FIX_BUTTON_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  'fill-holes': { bg: 'rgba(34, 197, 94, 0.1)', border: 'rgba(34, 197, 94, 0.2)', text: 'text-emerald-400' },
+  'smooth': { bg: 'rgba(168, 85, 247, 0.1)', border: 'rgba(168, 85, 247, 0.2)', text: 'text-purple-400' },
+  'decimate': { bg: 'rgba(249, 115, 22, 0.1)', border: 'rgba(249, 115, 22, 0.2)', text: 'text-orange-400' },
+  'slice': { bg: 'rgba(59, 130, 246, 0.1)', border: 'rgba(59, 130, 246, 0.2)', text: 'text-blue-400' },
+  'boolean': { bg: 'rgba(236, 72, 153, 0.1)', border: 'rgba(236, 72, 153, 0.2)', text: 'text-pink-400' },
+  'curvature': { bg: 'rgba(234, 179, 8, 0.1)', border: 'rgba(234, 179, 8, 0.2)', text: 'text-yellow-400' },
+  'quality': { bg: 'rgba(20, 184, 166, 0.1)', border: 'rgba(20, 184, 166, 0.2)', text: 'text-teal-400' },
+  'split': { bg: 'rgba(139, 92, 246, 0.1)', border: 'rgba(139, 92, 246, 0.2)', text: 'text-violet-400' },
+  'merge': { bg: 'rgba(6, 182, 212, 0.1)', border: 'rgba(6, 182, 212, 0.2)', text: 'text-cyan-400' },
+}
+
+/**
+ * Fix button component - memoized for performance
+ */
+const FixButton = memo(function FixButton({ label, onClick, loading, variant = 'fill-holes' }: FixButtonProps) {
+  const style = FIX_BUTTON_COLORS[variant]
   
   return (
     <Button
@@ -89,28 +117,270 @@ function FixButton({ label, onClick, loading, variant = 'fill-holes' }: FixButto
       {label}
     </Button>
   )
+})
+
+FixButton.displayName = 'FixButton'
+
+/**
+ * Debounce utility function
+ */
+function debounce<T extends (...args: Parameters<T>) => void>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  
+  return (...args: Parameters<T>) => {
+    if (timeout) {
+      clearTimeout(timeout)
+    }
+    timeout = setTimeout(() => func(...args), wait)
+  }
 }
 
-export default function Toolbar({ meshId, onUpdate }: Props) {
+// ============================================================================
+// Toolbar Component
+// ============================================================================
+
+function ToolbarComponent({ meshId, onUpdate, onAnalysisResult }: Props) {
   const [loading, setLoading] = useState(false)
   const [transformMode, setTransformMode] = useState('rotate')
+  const [sliceModalOpen, setSliceModalOpen] = useState(false)
+  const [booleanModalOpen, setBooleanModalOpen] = useState(false)
+  const [sliceAxis, setSliceAxis] = useState('z')
+  const [slicePosition, setSlicePosition] = useState(0)
+  const [booleanMeshId, setBooleanMeshId] = useState('')
+  const [availableMeshes, setAvailableMeshes] = useState<{value: string, label: string}[]>([])
+  
+  // Ref to track pending requests for debouncing
+  const pendingRequestRef = useRef<string | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
-  const handleTransform = async (op: string, params: any) => {
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
+
+  // Fetch available meshes for boolean operations
+  const fetchAvailableMeshes = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/mesh/`)
+      const meshes = data.meshes || []
+      setAvailableMeshes(
+        meshes
+          .filter((m: { id: string }) => m.id !== meshId)
+          .map((m: { id: string; filename: string }) => ({
+            value: m.id,
+            label: m.filename
+          }))
+      )
+    } catch (err) {
+      console.error('Failed to fetch meshes:', err)
+    }
+  }, [meshId])
+
+  /**
+   * Handle mesh transformation - debounced to prevent API spam
+   */
+  const handleTransform = useCallback(async (op: string, params: Record<string, unknown>) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    
+    abortControllerRef.current = new AbortController()
+    
     setLoading(true)
     try {
-      await axios.post(`http://localhost:8000/mesh/${meshId}/transform`, {
+      await axios.post(`${API_BASE_URL}/mesh/${meshId}/transform`, {
         operation: op,
         params
+      }, {
+        signal: abortControllerRef.current.signal
       })
-      // Refresh data
-      const { data } = await axios.get(`http://localhost:8000/mesh/${meshId}/analyze`)
+      
+      const { data } = await axios.get(`${API_BASE_URL}/mesh/${meshId}/analyze`, {
+        signal: abortControllerRef.current.signal
+      })
       onUpdate(data)
     } catch (err) {
-      console.error(err)
+      if (!axios.isCancel(err)) {
+        console.error('Transform error:', err)
+      }
     } finally {
       setLoading(false)
     }
-  }
+  }, [meshId, onUpdate])
+
+  // Debounced version
+  const debouncedTransform = useCallback(
+    debounce((op: string, params: Record<string, unknown>) => {
+      handleTransform(op, params)
+    }, 300),
+    [handleTransform]
+  )
+
+  // Transform handlers
+  const handleRotateMinus = useCallback(() => {
+    handleTransform('rotate', { angle: -90, axis: 'z' })
+  }, [handleTransform])
+
+  const handleRotatePlus = useCallback(() => {
+    handleTransform('rotate', { angle: 90, axis: 'z' })
+  }, [handleTransform])
+
+  const handleScaleDown = useCallback(() => {
+    handleTransform('scale', { x: 0.8, y: 0.8, z: 0.8 })
+  }, [handleTransform])
+
+  const handleScaleUp = useCallback(() => {
+    handleTransform('scale', { x: 1.2, y: 1.2, z: 1.2 })
+  }, [handleTransform])
+
+  const handleFillHoles = useCallback(() => {
+    handleTransform('fill_holes', {})
+  }, [handleTransform])
+
+  const handleSmooth = useCallback(() => {
+    handleTransform('smooth', { iterations: 20 })
+  }, [handleTransform])
+
+  const handleDecimate = useCallback(() => {
+    handleTransform('decimate', { reduction: 0.5 })
+  }, [handleTransform])
+
+  // Slicing operation
+  const handleSlice = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data } = await axios.post(`${API_BASE_URL}/mesh/${meshId}/slice`, {
+        axis: sliceAxis,
+        position: slicePosition,
+        invert: false
+      })
+      
+      if (data.new_mesh_id) {
+        // Refresh data with new mesh
+        const { data: newData } = await axios.get(`${API_BASE_URL}/mesh/${data.new_mesh_id}/analyze`)
+        onUpdate(newData)
+      }
+      setSliceModalOpen(false)
+    } catch (err) {
+      console.error('Slice error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [meshId, sliceAxis, slicePosition, onUpdate])
+
+  // Boolean operations
+  const handleBoolean = useCallback(async (operation: string) => {
+    if (!booleanMeshId) return
+    
+    setLoading(true)
+    try {
+      const { data } = await axios.post(`${API_BASE_URL}/mesh/${meshId}/boolean`, {
+        operation,
+        mesh_id_2: booleanMeshId
+      })
+      
+      if (data.new_mesh_id) {
+        const { data: newData } = await axios.get(`${API_BASE_URL}/mesh/${data.new_mesh_id}/analyze`)
+        onUpdate(newData)
+      }
+      setBooleanModalOpen(false)
+    } catch (err) {
+      console.error('Boolean error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [meshId, booleanMeshId, onUpdate])
+
+  // Curvature analysis
+  const handleCurvature = useCallback(async (method: string) => {
+    setLoading(true)
+    try {
+      const { data } = await axios.post(`${API_BASE_URL}/mesh/${meshId}/curvature`, {
+        method
+      })
+      
+      if (onAnalysisResult) {
+        onAnalysisResult(data)
+      }
+    } catch (err) {
+      console.error('Curvature error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [meshId, onAnalysisResult])
+
+  // Quality analysis
+  const handleQuality = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data } = await axios.post(`${API_BASE_URL}/mesh/${meshId}/quality`, {
+        compute_aspect_ratio: true,
+        compute_skewness: true,
+        compute_orthogonality: true
+      })
+      
+      if (onAnalysisResult) {
+        onAnalysisResult(data)
+      }
+    } catch (err) {
+      console.error('Quality error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [meshId, onAnalysisResult])
+
+  // Split mesh
+  const handleSplit = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data } = await axios.post(`${API_BASE_URL}/mesh/${meshId}/split-merge`, {
+        operation: 'split',
+        params: {}
+      })
+      
+      if (data.mesh_ids && data.mesh_ids.length > 0) {
+        // Load first component
+        const firstComp = data.mesh_ids[0]
+        const { data: newData } = await axios.get(`${API_BASE_URL}/mesh/${firstComp.id}/analyze`)
+        onUpdate(newData)
+      }
+    } catch (err) {
+      console.error('Split error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [meshId, onUpdate])
+
+  // Extract largest component
+  const handleExtractLargest = useCallback(async () => {
+    setLoading(true)
+    try {
+      const { data } = await axios.post(`${API_BASE_URL}/mesh/${meshId}/split-merge`, {
+        operation: 'extract_largest',
+        params: {}
+      })
+      
+      const { data: newData } = await axios.get(`${API_BASE_URL}/mesh/${meshId}/analyze`)
+      onUpdate(newData)
+    } catch (err) {
+      console.error('Extract largest error:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [meshId, onUpdate])
+
+  // Open boolean modal
+  const openBooleanModal = useCallback(() => {
+    fetchAvailableMeshes()
+    setBooleanModalOpen(true)
+  }, [fetchAvailableMeshes])
 
   return (
     <div className="glass-light rounded-xl p-4 animate-scale-in">
@@ -139,26 +409,26 @@ export default function Toolbar({ meshId, onUpdate }: Props) {
         <ToolButton 
           icon={<ArrowCounterClockwise size={18} />}
           label="Rotate -90°"
-          onClick={() => handleTransform('rotate', { angle: -90, axis: 'z' })}
+          onClick={handleRotateMinus}
           loading={loading}
         />
         <ToolButton 
           icon={<ArrowClockwise size={18} />}
           label="Rotate +90°"
-          onClick={() => handleTransform('rotate', { angle: 90, axis: 'z' })}
+          onClick={handleRotatePlus}
           loading={loading}
         />
         <ToolButton 
           icon={<MagnifyingMinus size={18} />}
           label="Scale Down"
-          onClick={() => handleTransform('scale', { x: 0.8, y: 0.8, z: 0.8 })}
+          onClick={handleScaleDown}
           loading={loading}
           accent
         />
         <ToolButton 
           icon={<MagnifyingPlus size={18} />}
           label="Scale Up"
-          onClick={() => handleTransform('scale', { x: 1.2, y: 1.2, z: 1.2 })}
+          onClick={handleScaleUp}
           loading={loading}
           accent
         />
@@ -172,23 +442,167 @@ export default function Toolbar({ meshId, onUpdate }: Props) {
       <div className="flex flex-wrap gap-2">
         <FixButton 
           label="Fill Holes" 
-          onClick={() => handleTransform('fill_holes', {})}
+          onClick={handleFillHoles}
           loading={loading}
           variant="fill-holes"
         />
         <FixButton 
           label="Smooth" 
-          onClick={() => handleTransform('smooth', {})}
+          onClick={handleSmooth}
           loading={loading}
           variant="smooth"
         />
         <FixButton 
           label="Decimate" 
-          onClick={() => handleTransform('decimate', { ratio: 0.5 })}
+          onClick={handleDecimate}
           loading={loading}
           variant="decimate"
         />
       </div>
+
+      <Divider my="sm" color="white/5" />
+
+      {/* Advanced Operations */}
+      <Text size="sm" fw={600} mb="sm">Advanced</Text>
+      
+      <div className="flex flex-wrap gap-2">
+        <FixButton 
+          label="Slice" 
+          onClick={() => setSliceModalOpen(true)}
+          loading={loading}
+          variant="slice"
+        />
+        <FixButton 
+          label="Boolean" 
+          onClick={openBooleanModal}
+          loading={loading}
+          variant="boolean"
+        />
+        <FixButton 
+          label="Curvature" 
+          onClick={() => handleCurvature('gaussian')}
+          loading={loading}
+          variant="curvature"
+        />
+        <FixButton 
+          label="Quality" 
+          onClick={handleQuality}
+          loading={loading}
+          variant="quality"
+        />
+      </div>
+
+      <Divider my="sm" color="white/5" />
+
+      {/* Split/Merge */}
+      <Text size="sm" fw={600} mb="sm">Topology</Text>
+      
+      <div className="flex flex-wrap gap-2">
+        <FixButton 
+          label="Split" 
+          onClick={handleSplit}
+          loading={loading}
+          variant="split"
+        />
+        <FixButton 
+          label="Extract Largest" 
+          onClick={handleExtractLargest}
+          loading={loading}
+          variant="merge"
+        />
+      </div>
+
+      {/* Slicing Modal */}
+      <Modal
+        opened={sliceModalOpen}
+        onClose={() => setSliceModalOpen(false)}
+        title="Slice Mesh"
+        centered
+        styles={{
+          content: { background: '#1A1B1E' },
+          header: { background: '#1A1B1E' }
+        }}
+      >
+        <Stack>
+          <Select
+            label="Axis"
+            value={sliceAxis}
+            onChange={(v) => setSliceAxis(v || 'z')}
+            data={[
+              { value: 'x', label: 'X Axis' },
+              { value: 'y', label: 'Y Axis' },
+              { value: 'z', label: 'Z Axis' },
+            ]}
+          />
+          <NumberInput
+            label="Position"
+            value={slicePosition}
+            onChange={(v) => setSlicePosition(Number(v) || 0)}
+            description="Position along the axis"
+          />
+          <Button onClick={handleSlice} loading={loading}>
+            Slice
+          </Button>
+        </Stack>
+      </Modal>
+
+      {/* Boolean Modal */}
+      <Modal
+        opened={booleanModalOpen}
+        onClose={() => setBooleanModalOpen(false)}
+        title="Boolean Operation"
+        centered
+        styles={{
+          content: { background: '#1A1B1E' },
+          header: { background: '#1A1B1E' }
+        }}
+      >
+        <Stack>
+          <Select
+            label="Second Mesh"
+            value={booleanMeshId}
+            onChange={(v) => setBooleanMeshId(v || '')}
+            data={availableMeshes}
+            placeholder="Select a mesh"
+            searchable
+          />
+          <Group grow>
+            <Button 
+              onClick={() => handleBoolean('union')}
+              loading={loading}
+              variant="light"
+              color="pink"
+            >
+              Union
+            </Button>
+            <Button 
+              onClick={() => handleBoolean('intersection')}
+              loading={loading}
+              variant="light"
+              color="pink"
+            >
+              Intersect
+            </Button>
+            <Button 
+              onClick={() => handleBoolean('difference')}
+              loading={loading}
+              variant="light"
+              color="pink"
+            >
+              Subtract
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </div>
   )
 }
+
+// Memoize the entire component
+const Toolbar = memo(ToolbarComponent, (prevProps, nextProps) => {
+  return prevProps.meshId === nextProps.meshId
+})
+
+Toolbar.displayName = 'Toolbar'
+
+export default Toolbar

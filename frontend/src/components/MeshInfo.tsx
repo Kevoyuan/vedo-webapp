@@ -1,8 +1,10 @@
+import { memo, useMemo } from 'react'
 import { Card, Text, Group, Stack, Badge } from '@mantine/core'
 import { Cube, Polygon, Ruler, Waves } from '@phosphor-icons/react'
+import type { MeshData } from '../types'
 
 interface Props {
-  data: any
+  data: MeshData
 }
 
 interface StatItemProps {
@@ -12,7 +14,10 @@ interface StatItemProps {
   accent?: boolean
 }
 
-function StatItem({ icon, label, value, accent }: StatItemProps) {
+/**
+ * Individual stat item component - memoized for performance
+ */
+const StatItem = memo(function StatItem({ icon, label, value, accent }: StatItemProps) {
   return (
     <Group gap="sm" className="group">
       <div className={`
@@ -34,14 +39,37 @@ function StatItem({ icon, label, value, accent }: StatItemProps) {
       </div>
     </Group>
   )
+})
+
+StatItem.displayName = 'StatItem'
+
+/**
+ * Format large numbers to human-readable format (e.g., 1.2K, 3.5M)
+ */
+function formatNumber(num: number): string {
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K'
+  return num.toLocaleString()
 }
 
-export default function MeshInfo({ data }: Props) {
-  const formatNumber = (num: number) => {
-    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
-    if (num >= 1000) return (num / 1000).toFixed(1) + 'K'
-    return num.toLocaleString()
-  }
+/**
+ * MeshInfo Component
+ * Displays mesh statistics and metadata
+ * Optimized with memoization to prevent unnecessary re-renders
+ */
+function MeshInfoComponent({ data }: Props) {
+  // Memoize formatted values to avoid recalculation
+  const stats = useMemo(() => ({
+    vertices: formatNumber(data.n_points || 0),
+    faces: formatNumber(data.n_cells || 0),
+    volume: data.volume ? `${data.volume.toFixed(2)} units³` : null,
+    area: data.area ? `${data.area.toFixed(2)} units²` : null,
+    bounds: data.bounds ? [
+      data.bounds[0], // x_min
+      data.bounds[2], // y_min
+      data.bounds[4], // z_min
+    ] : null,
+  }), [data])
 
   return (
     <Card 
@@ -72,34 +100,34 @@ export default function MeshInfo({ data }: Props) {
         <StatItem 
           icon={<Cube size={14} />}
           label="Vertices"
-          value={formatNumber(data.n_points || 0)}
+          value={stats.vertices}
           accent
         />
         
         <StatItem 
           icon={<Polygon size={14} />}
           label="Faces"
-          value={formatNumber(data.n_cells || 0)}
+          value={stats.faces}
         />
         
-        {data.volume && (
+        {stats.volume && (
           <StatItem 
             icon={<Waves size={14} />}
             label="Volume"
-            value={`${data.volume.toFixed(2)} units³`}
+            value={stats.volume}
             accent
           />
         )}
         
-        {data.area && (
+        {stats.area && (
           <StatItem 
             icon={<Ruler size={14} />}
             label="Surface Area"
-            value={`${data.area.toFixed(2)} units²`}
+            value={stats.area}
           />
         )}
 
-        {data.bounds && (
+        {stats.bounds && (
           <div className="pt-2 border-t border-white/5">
             <Text size="xs" c="dimmed" mb="xs">Bounding Box</Text>
             <Group gap="xs">
@@ -110,7 +138,7 @@ export default function MeshInfo({ data }: Props) {
                 >
                   <Text size="xs" c="dimmed">{axis}</Text>
                   <Text size="xs" fw={500}>
-                    {data.bounds[i]?.toFixed(2) || '0.00'}
+                    {stats.bounds[i]?.toFixed(2) || '0.00'}
                   </Text>
                 </div>
               ))}
@@ -121,3 +149,14 @@ export default function MeshInfo({ data }: Props) {
     </Card>
   )
 }
+
+// Memoize component to prevent unnecessary re-renders
+const MeshInfo = memo(MeshInfoComponent, (prevProps, nextProps) => {
+  return prevProps.data.id === nextProps.data.id &&
+    prevProps.data.n_points === nextProps.data.n_points &&
+    prevProps.data.n_cells === nextProps.data.n_cells
+})
+
+MeshInfo.displayName = 'MeshInfo'
+
+export default MeshInfo
