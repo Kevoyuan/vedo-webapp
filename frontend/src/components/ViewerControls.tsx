@@ -34,9 +34,16 @@ import {
   Trash,
   DotsThree,
   Eyedropper,
-  Thermometer
+  Thermometer,
+  Scissors,
+  Sparkle,
+  FilePdf,
+  FileCsv,
+  FileJson,
+  TrashSimple
 } from '@phosphor-icons/react'
 import { ViewerSettings, materialPresets, cameraPresets } from '../types/viewer'
+import { exportToJSON, exportToCSV, exportToPDF } from '../lib/measurementExport'
 
 interface Props {
   settings: ViewerSettings
@@ -44,6 +51,11 @@ interface Props {
   onScreenshot: () => void
   onRecording: () => void
   isRecording: boolean
+  meshInfo?: {
+    name: string
+    vertices: number
+    faces: number
+  }
 }
 
 export default function ViewerControls({ 
@@ -51,7 +63,8 @@ export default function ViewerControls({
   onSettingsChange, 
   onScreenshot, 
   onRecording,
-  isRecording 
+  isRecording,
+  meshInfo
 }: Props) {
   const [expandedPanel, setExpandedPanel] = useState<string | null>('view')
   
@@ -106,7 +119,7 @@ export default function ViewerControls({
         />
       </ControlPanel>
 
-      {/* Lighting Controls */}
+      {/* Lighting & Environment */}
       <ControlPanel 
         title="Lighting" 
         icon={<Sun size={16} />}
@@ -114,6 +127,32 @@ export default function ViewerControls({
         onToggle={() => togglePanel('lighting')}
       >
         <Stack gap="sm">
+          <Select
+            size="xs"
+            label="Environment"
+            value={settings.envMapPreset}
+            onChange={(v) => onSettingsChange({ envMapPreset: v as any })}
+            data={[
+              { value: 'city', label: 'City' },
+              { value: 'sunset', label: 'Sunset' },
+              { value: 'dawn', label: 'Dawn' },
+              { value: 'night', label: 'Night' },
+              { value: 'forest', label: 'Forest' },
+              { value: 'apartment', label: 'Apartment' },
+              { value: 'studio', label: 'Studio' },
+              { value: 'park', label: 'Park' },
+              { value: 'lobby', label: 'Lobby' },
+            ]}
+          />
+          <SliderControl
+            label="Env Intensity"
+            value={settings.envMapIntensity}
+            min={0}
+            max={3}
+            step={0.1}
+            onChange={(v) => onSettingsChange({ envMapIntensity: v })}
+          />
+          <Divider color="white/5" />
           <SliderControl
             label="Ambient"
             value={settings.ambientIntensity}
@@ -169,6 +208,8 @@ export default function ViewerControls({
               { value: 'glass', label: 'Glass' },
               { value: 'ceramic', label: 'Ceramic' },
               { value: 'matte', label: 'Matte' },
+              { value: 'wood', label: 'Wood' },
+              { value: 'fabric', label: 'Fabric' },
               { value: 'custom', label: 'Custom' },
             ]}
           />
@@ -179,31 +220,44 @@ export default function ViewerControls({
             onChange={(v) => onSettingsChange({ materialColor: v })}
           />
           
+          {/* Always show material sliders */}
+          <SliderControl
+            label="Metalness"
+            value={settings.metalness}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => onSettingsChange({ metalness: v })}
+          />
+          <SliderControl
+            label="Roughness"
+            value={settings.roughness}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => onSettingsChange({ roughness: v })}
+          />
+          <SliderControl
+            label="Opacity"
+            value={settings.opacity}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => onSettingsChange({ 
+              opacity: v,
+              transparent: v < 1
+            })}
+          />
+          
           {settings.materialPreset === 'custom' && (
             <>
               <SliderControl
-                label="Metalness"
+                label="Custom Offset"
                 value={settings.metalness}
-                min={0}
-                max={1}
+                min={-0.5}
+                max={0.5}
                 step={0.05}
-                onChange={(v) => onSettingsChange({ metalness: v })}
-              />
-              <SliderControl
-                label="Roughness"
-                value={settings.roughness}
-                min={0}
-                max={1}
-                step={0.05}
-                onChange={(v) => onSettingsChange({ roughness: v })}
-              />
-              <SliderControl
-                label="Opacity"
-                value={settings.opacity}
-                min={0}
-                max={1}
-                step={0.05}
-                onChange={(v) => onSettingsChange({ opacity: v })}
+                onChange={(v) => onSettingsChange({ metalness: v + 0.5 })}
               />
             </>
           )}
@@ -282,16 +336,76 @@ export default function ViewerControls({
               { label: 'Dist', value: 'distance' },
               { label: 'Angle', value: 'angle' },
               { label: 'Area', value: 'area' },
+              { label: 'Face', value: 'face-area' },
             ]}
           />
+          
+          {settings.measurementMode !== 'none' && (
+            <Text size="xs" c="dimmed">
+              {settings.measurementMode === 'distance' && 'Click two points to measure distance'}
+              {settings.measurementMode === 'angle' && 'Click three points to measure angle'}
+              {settings.measurementMode === 'area' && 'Click three points to measure area'}
+              {settings.measurementMode === 'face-area' && 'Click on mesh faces to measure area'}
+            </Text>
+          )}
           
           {settings.measurements.length > 0 && (
             <div className="space-y-2">
               <Divider color="white/5" />
+              
+              {/* Export Buttons */}
+              <div className="flex gap-1">
+                <Tooltip label="Export PDF">
+                  <ActionIcon 
+                    size="sm" 
+                    variant="light" 
+                    color="red"
+                    onClick={() => exportToPDF(settings.measurements, meshInfo)}
+                  >
+                    <FilePdf size={14} />
+                  </ActionIcon>
+                </Tooltip>
+                <Tooltip label="Export CSV">
+                  <ActionIcon 
+                    size="sm" 
+                    variant="light" 
+                    color="green"
+                    onClick={() => exportToCSV(settings.measurements)}
+                  >
+                    <FileCsv size={14} />
+                  </ActionIcon>
+                </Tooltip>
+                <Tooltip label="Export JSON">
+                  <ActionIcon 
+                    size="sm" 
+                    variant="light" 
+                    color="blue"
+                    onClick={() => exportToJSON(settings.measurements)}
+                  >
+                    <FileJson size={14} />
+                  </ActionIcon>
+                </Tooltip>
+                <Tooltip label="Clear All">
+                  <ActionIcon 
+                    size="sm" 
+                    variant="light" 
+                    color="gray"
+                    onClick={() => onSettingsChange({ measurements: [] })}
+                  >
+                    <TrashSimple size={14} />
+                  </ActionIcon>
+                </Tooltip>
+              </div>
+              
+              <Divider color="white/5" />
+              
+              {/* Measurement List */}
               {settings.measurements.map((m, i) => (
                 <Group key={m.id} justify="space-between">
                   <Text size="xs" c="dimmed">
-                    {m.type === 'distance' ? '📏' : m.type === 'angle' ? '📐' : '⬡'} {m.label}: {m.value.toFixed(2)}
+                    {m.type === 'distance' ? '📏' : m.type === 'angle' ? '📐' : '⬡'} {m.label}: {m.value.toFixed(3)}
+                    {m.type === 'angle' && '°'}
+                    {(m.type === 'area' || m.type === 'face-area') && ' sq'}
                   </Text>
                   <ActionIcon 
                     size="xs" 
@@ -307,7 +421,309 @@ export default function ViewerControls({
                   </ActionIcon>
                 </Group>
               ))}
+              
+              {/* Summary */}
+              <Divider color="white/5" />
+              <Group justify="space-between">
+                <Text size="xs" c="dimmed">
+                  Total: {settings.measurements.length}
+                </Text>
+                {settings.measurements.length > 0 && (
+                  <Text size="xs" c="cyan" fw={500}>
+                    {settings.measurements.reduce((sum, m) => {
+                      if (m.type === 'distance') return sum + m.value
+                      if (m.type === 'area' || m.type === 'face-area') return sum + m.value
+                      return sum
+                    }, 0).toFixed(3)} total
+                  </Text>
+                )}
+              </Group>
             </div>
+          )}
+        </Stack>
+      </ControlPanel>
+
+      {/* Clipping Planes */}
+      <ControlPanel 
+        title="Clipping" 
+        icon={<Scissors size={16} />}
+        expanded={expandedPanel === 'clipping'}
+        onToggle={() => togglePanel('clipping')}
+      >
+        <Stack gap="sm">
+          <Group justify="space-between">
+            <Text size="xs" c="dimmed">Enable</Text>
+            <ActionIcon
+              size="sm"
+              variant={settings.clippingEnabled ? 'filled' : 'subtle'}
+              color={settings.clippingEnabled ? 'cyan' : 'gray'}
+              onClick={() => onSettingsChange({ clippingEnabled: !settings.clippingEnabled })}
+            >
+              <Eye size={14} />
+            </ActionIcon>
+          </Group>
+          
+          {settings.clippingEnabled && (
+            <>
+              <SegmentedControl
+                size="xs"
+                fullWidth
+                value={settings.clippingAxis}
+                onChange={(v) => onSettingsChange({ clippingAxis: v as any })}
+                data={[
+                  { label: 'X', value: 'x' },
+                  { label: 'Y', value: 'y' },
+                  { label: 'Z', value: 'z' },
+                  { label: 'None', value: 'none' },
+                ]}
+              />
+              
+              <SliderControl
+                label="Position"
+                value={settings.clippingPosition}
+                min={-10}
+                max={10}
+                step={0.1}
+                onChange={(v) => onSettingsChange({ clippingPosition: v })}
+              />
+              
+              <SegmentedControl
+                size="xs"
+                fullWidth
+                value={settings.clippingSide}
+                onChange={(v) => onSettingsChange({ clippingSide: v as any })}
+                data={[
+                  { label: 'Below', value: 'below' },
+                  { label: 'Above', value: 'above' },
+                ]}
+              />
+              
+              <Group justify="space-between">
+                <Text size="xs" c="dimmed">Double-Sided</Text>
+                <ActionIcon
+                  size="sm"
+                  variant={settings.doubleSided ? 'filled' : 'subtle'}
+                  color={settings.doubleSided ? 'cyan' : 'gray'}
+                  onClick={() => onSettingsChange({ doubleSided: !settings.doubleSided })}
+                >
+                  <Eye size={14} />
+                </ActionIcon>
+              </Group>
+            </>
+          )}
+        </Stack>
+      </ControlPanel>
+
+      {/* Post-Processing Effects */}
+      <ControlPanel 
+        title="Effects" 
+        icon={<Sparkle size={16} />}
+        expanded={expandedPanel === 'effects'}
+        onToggle={() => togglePanel('effects')}
+      >
+        <Stack gap="sm">
+          {/* Bloom */}
+          <EffectToggle
+            label="Bloom"
+            enabled={settings.postProcessing.bloom.enabled}
+            onToggle={() => onSettingsChange({
+              postProcessing: {
+                ...settings.postProcessing,
+                bloom: { ...settings.postProcessing.bloom, enabled: !settings.postProcessing.bloom.enabled }
+              }
+            })}
+          />
+          {settings.postProcessing.bloom.enabled && (
+            <>
+              <SliderControl
+                label="Intensity"
+                value={settings.postProcessing.bloom.intensity}
+                min={0}
+                max={2}
+                step={0.1}
+                onChange={(v) => onSettingsChange({
+                  postProcessing: {
+                    ...settings.postProcessing,
+                    bloom: { ...settings.postProcessing.bloom, intensity: v }
+                  }
+                })}
+              />
+              <SliderControl
+                label="Threshold"
+                value={settings.postProcessing.bloom.luminanceThreshold}
+                min={0}
+                max={1}
+                step={0.05}
+                onChange={(v) => onSettingsChange({
+                  postProcessing: {
+                    ...settings.postProcessing,
+                    bloom: { ...settings.postProcessing.bloom, luminanceThreshold: v }
+                  }
+                })}
+              />
+            </>
+          )}
+
+          <Divider color="white/5" />
+
+          {/* Depth of Field */}
+          <EffectToggle
+            label="Depth of Field"
+            enabled={settings.postProcessing.dof.enabled}
+            onToggle={() => onSettingsChange({
+              postProcessing: {
+                ...settings.postProcessing,
+                dof: { ...settings.postProcessing.dof, enabled: !settings.postProcessing.dof.enabled }
+              }
+            })}
+          />
+          {settings.postProcessing.dof.enabled && (
+            <>
+              <SliderControl
+                label="Focus Distance"
+                value={settings.postProcessing.dof.focusDistance}
+                min={1}
+                max={20}
+                step={0.5}
+                onChange={(v) => onSettingsChange({
+                  postProcessing: {
+                    ...settings.postProcessing,
+                    dof: { ...settings.postProcessing.dof, focusDistance: v }
+                  }
+                })}
+              />
+              <SliderControl
+                label="Focal Length"
+                value={settings.postProcessing.dof.focalLength}
+                min={10}
+                max={100}
+                step={5}
+                onChange={(v) => onSettingsChange({
+                  postProcessing: {
+                    ...settings.postProcessing,
+                    dof: { ...settings.postProcessing.dof, focalLength: v }
+                  }
+                })}
+              />
+              <SliderControl
+                label="Bokeh"
+                value={settings.postProcessing.dof.bokehScale}
+                min={1}
+                max={10}
+                step={0.5}
+                onChange={(v) => onSettingsChange({
+                  postProcessing: {
+                    ...settings.postProcessing,
+                    dof: { ...settings.postProcessing.dof, bokehScale: v }
+                  }
+                })}
+              />
+            </>
+          )}
+
+          <Divider color="white/5" />
+
+          {/* SSAO */}
+          <EffectToggle
+            label="Ambient Occlusion"
+            enabled={settings.postProcessing.ssao.enabled}
+            onToggle={() => onSettingsChange({
+              postProcessing: {
+                ...settings.postProcessing,
+                ssao: { ...settings.postProcessing.ssao, enabled: !settings.postProcessing.ssao.enabled }
+              }
+            })}
+          />
+          {settings.postProcessing.ssao.enabled && (
+            <>
+              <SliderControl
+                label="Intensity"
+                value={settings.postProcessing.ssao.intensity}
+                min={0}
+                max={4}
+                step={0.1}
+                onChange={(v) => onSettingsChange({
+                  postProcessing: {
+                    ...settings.postProcessing,
+                    ssao: { ...settings.postProcessing.ssao, intensity: v }
+                  }
+                })}
+              />
+              <SliderControl
+                label="Radius"
+                value={settings.postProcessing.ssao.radius}
+                min={1}
+                max={15}
+                step={0.5}
+                onChange={(v) => onSettingsChange({
+                  postProcessing: {
+                    ...settings.postProcessing,
+                    ssao: { ...settings.postProcessing.ssao, radius: v }
+                  }
+                })}
+              />
+            </>
+          )}
+
+          <Divider color="white/5" />
+
+          {/* FXAA */}
+          <EffectToggle
+            label="Anti-Aliasing (FXAA)"
+            enabled={settings.postProcessing.fxaa.enabled}
+            onToggle={() => onSettingsChange({
+              postProcessing: {
+                ...settings.postProcessing,
+                fxaa: { ...settings.postProcessing.fxaa, enabled: !settings.postProcessing.fxaa.enabled }
+              }
+            })}
+          />
+
+          <Divider color="white/5" />
+
+          {/* Tone Mapping */}
+          <EffectToggle
+            label="Tone Mapping"
+            enabled={settings.postProcessing.toneMapping.enabled}
+            onToggle={() => onSettingsChange({
+              postProcessing: {
+                ...settings.postProcessing,
+                toneMapping: { ...settings.postProcessing.toneMapping, enabled: !settings.postProcessing.toneMapping.enabled }
+              }
+            })}
+          />
+          {settings.postProcessing.toneMapping.enabled && (
+            <>
+              <Select
+                size="xs"
+                label="Method"
+                value={settings.postProcessing.toneMapping.method}
+                onChange={(v) => onSettingsChange({
+                  postProcessing: {
+                    ...settings.postProcessing,
+                    toneMapping: { ...settings.postProcessing.toneMapping, method: v as any }
+                  }
+                })}
+                data={[
+                  { value: 'ACESFilmic', label: 'ACES Filmic' },
+                  { value: 'Reinhard', label: 'Reinhard' },
+                  { value: 'Cineon', label: 'Cineon' },
+                ]}
+              />
+              <SliderControl
+                label="Exposure"
+                value={settings.postProcessing.toneMapping.exposure}
+                min={0.1}
+                max={3}
+                step={0.1}
+                onChange={(v) => onSettingsChange({
+                  postProcessing: {
+                    ...settings.postProcessing,
+                    toneMapping: { ...settings.postProcessing.toneMapping, exposure: v }
+                  }
+                })}
+              />
+            </>
           )}
         </Stack>
       </ControlPanel>
@@ -488,5 +904,28 @@ function ColorPicker({ label, value, onChange }: ColorPickerProps) {
         </Popover>
       </Group>
     </div>
+  )
+}
+
+// Effect Toggle Component
+interface EffectToggleProps {
+  label: string
+  enabled: boolean
+  onToggle: () => void
+}
+
+function EffectToggle({ label, enabled, onToggle }: EffectToggleProps) {
+  return (
+    <Group justify="space-between">
+      <Text size="xs" c="dimmed">{label}</Text>
+      <ActionIcon
+        size="sm"
+        variant={enabled ? 'filled' : 'subtle'}
+        color={enabled ? 'cyan' : 'gray'}
+        onClick={onToggle}
+      >
+        <Eye size={14} />
+      </ActionIcon>
+    </Group>
   )
 }

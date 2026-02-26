@@ -153,12 +153,20 @@ def _get_or_compute_cache(mesh_id: str, compute_fn, *args):
 # API Endpoints
 # ============================================================================
 
-@router.post("/import", response_model=MeshInfo, status_code=201)
+@router.post("/import", response_model=MeshInfo, status_code=201, responses={400: {"model": "ErrorResponse", "description": "Unsupported file format or failed to load mesh"}, 500: {"model": "ErrorResponse", "description": "Failed to save file"}})
 async def import_mesh(file: UploadFile = File(...)):
     """
-    Import a mesh file
-    Supported formats: STL, OBJ, PLY, VTK, GLTF/GLB, 3MF, OFF, WRL, XYZ
-    Uses async file handling for better performance
+    Import a mesh file.
+    
+    Upload and process a 3D mesh file. The file is saved to temp storage
+    and analyzed using Vedo to extract metadata.
+    
+    **Supported formats:** STL, OBJ, PLY, VTK, GLTF/GLB, 3MF, OFF, WRL, XYZ
+    
+    **Parameters:**
+    - `file`: The mesh file to import (multipart/form-data)
+    
+    **Returns:** Mesh information including ID, filename, point/cell counts, volume, area, bounding box
     """
     # Validate file extension
     ext = Path(file.filename).suffix.lower().lstrip('.')
@@ -230,9 +238,23 @@ async def import_mesh(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail=f"Failed to load mesh: {str(e)}")
 
 
-@router.get("/{mesh_id}", response_model=MeshMetadata)
+@router.get("/{mesh_id}", response_model=MeshMetadata, responses={404: {"model": "ErrorResponse", "description": "Mesh not found"}})
 async def get_mesh_info(mesh_id: str):
-    """Get detailed mesh information"""
+    """
+    Get detailed mesh information.
+    
+    Returns comprehensive metadata including:
+    - Point and cell counts
+    - Volume and surface area
+    - Bounding box coordinates
+    - Center of mass
+    - File size and creation time
+    
+    **Parameters:**
+    - `mesh_id`: The unique identifier of the mesh
+    
+    **Returns:** Detailed mesh metadata
+    """
     if mesh_id not in mesh_store:
         raise HTTPException(status_code=404, detail="Mesh not found")
     
@@ -270,9 +292,27 @@ async def get_mesh_info(mesh_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to load mesh: {str(e)}")
 
 
-@router.get("/{mesh_id}/analyze", response_model=AnalysisResult)
+@router.get("/{mesh_id}/analyze", response_model=AnalysisResult, responses={404: {"model": "ErrorResponse", "description": "Mesh not found"}})
 async def analyze_mesh(mesh_id: str, compute_curvature: bool = False):
-    """Analyze a mesh with optional curvature computation"""
+    """
+    Analyze a mesh with optional curvature computation.
+    
+    Provides detailed geometric analysis including:
+    - Number of points and cells
+    - Volume (for closed meshes)
+    - Surface area
+    - Bounding box
+    - Center of mass
+    - Optional curvature analysis (Principal Curvature Values)
+    
+    Results are cached for improved performance.
+    
+    **Parameters:**
+    - `mesh_id`: The unique identifier of the mesh
+    - `compute_curvature`: Whether to compute curvature data (slower)
+    
+    **Returns:** Complete mesh analysis results
+    """
     if mesh_id not in mesh_store:
         raise HTTPException(status_code=404, detail="Mesh not found")
     
@@ -334,11 +374,24 @@ async def analyze_mesh(mesh_id: str, compute_curvature: bool = False):
         raise HTTPException(status_code=500, detail=f"Failed to analyze mesh: {str(e)}")
 
 
-@router.post("/{mesh_id}/transform")
+@router.post("/{mesh_id}/transform", responses={404: {"model": "ErrorResponse", "description": "Mesh not found"}, 500: {"model": "ErrorResponse", "description": "Transform failed"}})
 async def transform_mesh(mesh_id: str, request: TransformRequest):
     """
-    Transform a mesh (rotate, scale, translate)
-    Uses async processing with thread pool
+    Transform a mesh (rotate, scale, translate).
+    
+    Supported operations:
+    - **rotate**: Rotate around an axis (x, y, or z). Parameters: `angle` (degrees), `axis`
+    - **scale**: Scale along axes. Parameters: `x`, `y`, `z` (default 1.0)
+    - **translate**: Translate along axes. Parameters: `x`, `y`, `z`
+    - **flip**: Flip normals
+    - **center**: Align mesh to origin
+    
+    **Parameters:**
+    - `mesh_id`: The unique identifier of the mesh
+    - `operation`: Transformation type (rotate, scale, translate, flip, center)
+    - `params`: Operation-specific parameters
+    
+    **Returns:** Success status and updated mesh statistics
     """
     if mesh_id not in mesh_store:
         raise HTTPException(status_code=404, detail="Mesh not found")
@@ -407,9 +460,25 @@ async def transform_mesh(mesh_id: str, request: TransformRequest):
         raise HTTPException(status_code=500, detail=f"Transform failed: {str(e)}")
 
 
-@router.post("/{mesh_id}/fix")
+@router.post("/{mesh_id}/fix", responses={404: {"model": "ErrorResponse", "description": "Mesh not found"}, 500: {"model": "ErrorResponse", "description": "Fix operation failed"}})
 async def fix_mesh(mesh_id: str, request: FixRequest):
-    """Fix mesh issues - async processing"""
+    """
+    Fix mesh issues with various repair operations.
+    
+    Supported operations:
+    - **fill_holes**: Close small holes in the mesh
+    - **smooth**: Smooth mesh surface. Parameters: `iterations` (default 20)
+    - **decimate**: Reduce mesh complexity. Parameters: `reduction` (0.0-1.0, default 0.5)
+    - **compute_normals**: Recompute surface normals
+    - **clean**: Remove duplicate points and degenerate cells
+    
+    **Parameters:**
+    - `mesh_id`: The unique identifier of the mesh
+    - `operation`: Fix operation to perform
+    - `params`: Operation-specific parameters
+    
+    **Returns:** Success status and updated mesh statistics
+    """
     if mesh_id not in mesh_store:
         raise HTTPException(status_code=404, detail="Mesh not found")
     
@@ -467,11 +536,23 @@ async def fix_mesh(mesh_id: str, request: FixRequest):
         raise HTTPException(status_code=500, detail=f"Fix operation failed: {str(e)}")
 
 
-@router.get("/{mesh_id}/visualize", response_model=VisualizeResponse)
+@router.get("/{mesh_id}/visualize", response_model=VisualizeResponse, responses={404: {"model": "ErrorResponse", "description": "Mesh not found"}})
 async def visualize_mesh(mesh_id: str, include_normals: bool = False):
     """
-    Get mesh data optimized for Three.js BufferGeometry
-    Includes caching for improved performance
+    Get mesh data optimized for Three.js BufferGeometry.
+    
+    Converts mesh to Three.js-compatible format with:
+    - Vertex positions as list of [x, y, z] coordinates
+    - Face indices as list of [v1, v2, v3] triangles
+    - Optional vertex normals
+    
+    Results are cached for improved performance.
+    
+    **Parameters:**
+    - `mesh_id`: The unique identifier of the mesh
+    - `include_normals`: Whether to include vertex normals
+    
+    **Returns:** Three.js compatible mesh data
     """
     if mesh_id not in mesh_store:
         raise HTTPException(status_code=404, detail="Mesh not found")
@@ -544,9 +625,22 @@ async def visualize_mesh(mesh_id: str, include_normals: bool = False):
         raise HTTPException(status_code=500, detail=f"Failed to get visualization data: {str(e)}")
 
 
-@router.get("/{mesh_id}/visualize/buffer")
+@router.get("/{mesh_id}/visualize/buffer", responses={404: {"model": "ErrorResponse", "description": "Mesh not found"}})
 async def visualize_mesh_buffer(mesh_id: str):
-    """Get mesh data as flat typed arrays for optimal Three.js performance"""
+    """
+    Get mesh data as flat typed arrays for optimal Three.js performance.
+    
+    Returns binary data containing:
+    - 4 bytes: number of vertices
+    - Float32 array: vertex positions (x, y, z per vertex)
+    - 4 bytes: number of indices  
+    - Uint32 array: face indices
+    
+    **Parameters:**
+    - `mesh_id`: The unique identifier of the mesh
+    
+    **Returns:** Binary mesh data as octet-stream
+    """
     if mesh_id not in mesh_store:
         raise HTTPException(status_code=404, detail="Mesh not found")
     
@@ -608,11 +702,19 @@ class ExportRequest(BaseModel):
     binary: bool = Field(default=True, description="Binary format for STL")
 
 
-@router.post("/{mesh_id}/export")
+@router.post("/{mesh_id}/export", responses={404: {"model": "ErrorResponse", "description": "Mesh not found"}, 400: {"model": "ErrorResponse", "description": "Unsupported format"}, 500: {"model": "ErrorResponse", "description": "Export failed"}})
 async def export_mesh(mesh_id: str, request: ExportRequest):
     """
-    Export a mesh to specified format
-    Supports STL, OBJ, PLY, VTK formats
+    Export a mesh to specified format.
+    
+    Supported formats: STL, OBJ, PLY, VTK, GLTF, GLB, 3MF, OFF, WRL, XYZ
+    
+    **Parameters:**
+    - `mesh_id`: The unique identifier of the mesh
+    - `format`: Export format (stl, obj, ply, vtk, etc.)
+    - `binary`: Whether to use binary format (for STL)
+    
+    **Returns:** Binary mesh file as attachment
     """
     if mesh_id not in mesh_store:
         raise HTTPException(status_code=404, detail="Mesh not found")
@@ -682,9 +784,19 @@ async def export_mesh(mesh_id: str, request: ExportRequest):
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
 
-@router.delete("/{mesh_id}")
+@router.delete("/{mesh_id}", responses={404: {"model": "ErrorResponse", "description": "Mesh not found"}})
 async def delete_mesh(mesh_id: str):
-    """Delete a mesh and invalidate cache"""
+    """
+    Delete a mesh and invalidate cache.
+    
+    Removes the mesh from storage, clears cached data, 
+    and removes the file from disk.
+    
+    **Parameters:**
+    - `mesh_id`: The unique identifier of the mesh
+    
+    **Returns:** Success status
+    """
     if mesh_id not in mesh_store:
         raise HTTPException(status_code=404, detail="Mesh not found")
     
@@ -695,7 +807,13 @@ async def delete_mesh(mesh_id: str):
 
 @router.get("/")
 async def list_meshes():
-    """List all imported meshes"""
+    """
+    List all imported meshes.
+    
+    Returns a list of all meshes currently in the storage.
+    
+    **Returns:** List of mesh summaries with ID, filename, point/cell counts
+    """
     meshes = []
     for mesh_id, data in mesh_store.items():
         meshes.append({
@@ -709,7 +827,13 @@ async def list_meshes():
 
 @router.delete("/")
 async def cleanup_all():
-    """Clean up all meshes (admin)"""
+    """
+    Clean up all meshes (admin operation).
+    
+    WARNING: This deletes all meshes from storage and cache.
+    
+    **Returns:** Count of deleted meshes
+    """
     count = len(mesh_store)
     for mesh_id in list(mesh_store.keys()):
         cleanup_mesh(mesh_id)

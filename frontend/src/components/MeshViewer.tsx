@@ -16,6 +16,7 @@ import { motion } from 'framer-motion'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { ViewerSettings, cameraPresets, Measurement, Annotation } from '../types/viewer'
 import { MeshData } from '../types'
+import PostProcessing from './PostProcessing'
 
 interface MeshItem {
   id: string
@@ -82,6 +83,35 @@ function Mesh({ vertices, faces, settings, visible = true, isSelected = false }:
 }) {
   const meshRef = useRef<THREE.Mesh>(null)
   
+  // Auto-enable double-sided rendering when clipping is active
+  const effectiveDoubleSided = settings.clippingEnabled && settings.clippingAxis !== 'none' 
+    ? true 
+    : settings.doubleSided
+  
+  // Create clipping plane based on settings
+  const clippingPlane = useMemo(() => {
+    if (!settings.clippingEnabled || settings.clippingAxis === 'none') {
+      return null
+    }
+    
+    const normal = new THREE.Vector3()
+    let position = settings.clippingPosition
+    
+    switch (settings.clippingAxis) {
+      case 'x':
+        normal.set(settings.clippingSide === 'below' ? 1 : -1, 0, 0)
+        break
+      case 'y':
+        normal.set(0, settings.clippingSide === 'below' ? 1 : -1, 0)
+        break
+      case 'z':
+        normal.set(0, 0, settings.clippingSide === 'below' ? 1 : -1)
+        break
+    }
+    
+    return new THREE.Plane(normal, position)
+  }, [settings.clippingEnabled, settings.clippingAxis, settings.clippingPosition, settings.clippingSide])
+  
   const geometry = useMemo(() => {
     if (!vertices.length) return null
     
@@ -115,33 +145,95 @@ function Mesh({ vertices, faces, settings, visible = true, isSelected = false }:
 
   // Determine render mode
   const getMaterial = () => {
+    const side = effectiveDoubleSided ? THREE.DoubleSide : THREE.FrontSide
+    
     const baseProps = {
       color: settings.materialColor,
-      side: THREE.DoubleSide,
+      side: side,
       metalness: settings.metalness,
       roughness: settings.roughness,
-      envMapIntensity: 1.2,
+      envMapIntensity: settings.envMapIntensity,
       opacity: settings.opacity,
       transparent: settings.transparent || settings.opacity < 1,
+      clippingPlanes: clippingPlane ? [clippingPlane] : [],
+      clipShadows: true,
+      shadowSide: THREE.DoubleSide,
     }
 
     const hasVertexColors = settings.colorMapEnabled && vertices.length > 0
 
+    // Enhanced PBR materials based on preset
+    const getPresetMaterial = () => {
+      switch (settings.materialPreset) {
+        case 'glass':
+          return (
+            <meshPhysicalMaterial
+              {...baseProps}
+              transmission={0.9}
+              thickness={0.5}
+              ior={1.5}
+              clearcoat={1}
+              clearcoatRoughness={0.1}
+              transparent
+              opacity={settings.opacity}
+            />
+          )
+        case 'ceramic':
+          return (
+            <meshStandardMaterial
+              {...baseProps}
+              metalness={0.05}
+              roughness={0.4}
+            />
+          )
+        case 'matte':
+          return (
+            <meshStandardMaterial
+              {...baseProps}
+              metalness={0}
+              roughness={0.95}
+            />
+          )
+        case 'wood':
+          return (
+            <meshStandardMaterial
+              {...baseProps}
+              metalness={0}
+              roughness={0.7}
+            />
+          )
+        case 'fabric':
+          return (
+            <meshStandardMaterial
+              {...baseProps}
+              metalness={0}
+              roughness={0.85}
+              sheen={1}
+              sheenRoughness={0.5}
+              sheenColor={new THREE.Color(settings.materialColor).multiplyScalar(0.5)}
+            />
+          )
+        case 'metallic':
+        default:
+          return <meshStandardMaterial {...baseProps} />
+      }
+    }
+
     switch (settings.viewMode) {
       case 'wireframe':
         return hasVertexColors 
-          ? <meshBasicMaterial vertexColors wireframe toneMapped={false} />
-          : <meshBasicMaterial color={settings.materialColor} wireframe />
+          ? <meshBasicMaterial vertexColors wireframe toneMapped={false} clippingPlanes={clippingPlane ? [clippingPlane] : []} clipShadows />
+          : <meshBasicMaterial color={settings.materialColor} wireframe clippingPlanes={clippingPlane ? [clippingPlane] : []} clipShadows />
       case 'xray':
         return <meshStandardMaterial {...baseProps} transparent opacity={0.3} depthWrite={false} blending={THREE.AdditiveBlending} />
       case 'annotation':
         return hasVertexColors
           ? <meshStandardMaterial {...baseProps} vertexColors toneMapped={false} />
-          : <meshStandardMaterial {...baseProps} />
+          : getPresetMaterial()
       default:
         return hasVertexColors
           ? <meshStandardMaterial {...baseProps} vertexColors toneMapped={false} />
-          : <meshStandardMaterial {...baseProps} />
+          : getPresetMaterial()
     }
   }
 
@@ -249,7 +341,7 @@ function MultiMeshScene({
       {/* Annotations */}
       <Annotations annotations={settings.annotations} />
       
-      <Environment preset="city" />
+      <Environment preset={settings.envMapPreset} background={false} />
       <OrbitControls 
         makeDefault 
         enableDamping
@@ -280,9 +372,67 @@ function MeasurementPoints({
 }) {
   const { camera } = useThree()
   const [points, setPoints] = useState<[number, number, number][]>([])
+  const [selectedFaces, setSelectedFaces] = useState<{faceIndex: number; points: [number, number, number][]; area: number}[]>([])
 
   const handleClick = useCallback((e: any) => {
     if (settings.measurementMode === 'none') return
+    
+    // Handle face-area mode - click on mesh faces
+    if (settings.measurementMode === 'face-area') {
+      e.stopPropagation()
+      
+      const faceIndex = e.faceIndex
+      if (faceIndex === undefined) return
+      
+      // Get the face vertices from the intersection
+      const a = e.point // approximation - click point
+      const object = e.object
+      
+      // Get the actual face vertices from geometry
+      if (object.geometry && object.geometry.index) {
+        const geo = object.geometry
+        const indices = geo.index.array
+        const positions = geo.attributes.position.array
+        
+        // Get vertices for this face
+        const i0 = indices[faceIndex * 3]
+        const i1 = indices[faceIndex * 3 + 1]
+        const i2 = indices[faceIndex * 3 + 2]
+        
+        const v0 = [positions[i0 * 3], positions[i0 * 3 + 1], positions[i0 * 3 + 2]] as [number, number, number]
+        const v1 = [positions[i1 * 3], positions[i1 * 3 + 1], positions[i1 * 3 + 2]] as [number, number, number]
+        const v2 = [positions[i2 * 3], positions[i2 * 3 + 1], positions[i2 * 3 + 2]] as [number, number, number]
+        
+        // Calculate area using cross product
+        const p1 = new THREE.Vector3(...v0)
+        const p2 = new THREE.Vector3(...v1)
+        const p3 = new THREE.Vector3(...v2)
+        
+        const vA = p2.clone().sub(p1)
+        const vB = p3.clone().sub(p1)
+        const cross = new THREE.Vector3().crossVectors(vA, vB)
+        const area = cross.length() / 2
+        
+        const faceData = {
+          faceIndex,
+          points: [v0, v1, v2],
+          area
+        }
+        
+        setSelectedFaces(prev => [...prev, faceData])
+        
+        // Add measurement
+        onAddMeasurement({
+          id: Date.now().toString(),
+          type: 'face-area',
+          points: [v0, v1, v2],
+          value: area,
+          label: `Face${settings.measurements.length + 1}`,
+          faceIndex
+        })
+      }
+      return
+    }
     
     const point = e.point
     const newPoints = [...points, [point.x, point.y, point.z] as [number, number, number]]
@@ -338,12 +488,20 @@ function MeasurementPoints({
       })
       setPoints([])
     }
-  }, [points, settings.measurementMode, settings.measurements.length, onAddMeasurement])
+  }, [points, settings.measurementMode, settings.measurements.length, onAddMeasurement, selectedFaces])
+
+  // Clear selected faces when switching away from face-area mode
+  useEffect(() => {
+    if (settings.measurementMode !== 'face-area') {
+      setSelectedFaces([])
+    }
+  }, [settings.measurementMode])
 
   if (settings.measurementMode === 'none') return null
 
   return (
     <group>
+      {/* Point-based measurements */}
       {points.map((p, i) => (
         <mesh key={i} position={p} onClick={handleClick}>
           <sphereGeometry args={[0.05, 16, 16]} />
@@ -357,7 +515,43 @@ function MeasurementPoints({
           lineWidth={2}
         />
       )}
+      
+      {/* Face area highlights */}
+      {selectedFaces.map((face, i) => (
+        <FaceHighlight key={i} face={face} index={i} />
+      ))}
     </group>
+  )
+}
+
+// Face Highlight Component for showing selected faces
+function FaceHighlight({ face, index }: { face: { points: [number, number, number][]; area: number }, index: number }) {
+  const geometry = useMemo(() => {
+    const geo = new THREE.BufferGeometry()
+    const positions = new Float32Array(face.points.flat())
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    geo.computeVertexNormals()
+    return geo
+  }, [face.points])
+  
+  const colors = useMemo(() => {
+    const color = new THREE.Color()
+    // Different color for each selected face
+    const hue = (index * 0.15) % 1
+    color.setHSL(hue, 0.8, 0.5)
+    return color
+  }, [index])
+  
+  return (
+    <mesh geometry={geometry}>
+      <meshBasicMaterial 
+        color={colors} 
+        transparent 
+        opacity={0.3} 
+        side={THREE.DoubleSide}
+        depthWrite={false}
+      />
+    </mesh>
   )
 }
 
@@ -651,7 +845,7 @@ function SceneContent({
       {/* Annotations */}
       <Annotations annotations={settings.annotations} />
       
-      <Environment preset="city" />
+      <Environment preset={settings.envMapPreset} background={false} />
       <OrbitControls 
         makeDefault 
         enableDamping
@@ -728,7 +922,7 @@ export default function MeshViewer({
     <>
       <Canvas 
         camera={{ position: cameraConfig.position, fov: 45 }}
-        gl={{ antialias: true, alpha: true }}
+        gl={{ antialias: true, alpha: true, localClippingEnabled: true }}
         dpr={[1, 2]}
       >
         <MultiMeshScene 
@@ -737,6 +931,7 @@ export default function MeshViewer({
           onAddMeasurement={handleAddMeasurement}
           selectedMeshId={selectedMeshId}
         />
+        <PostProcessing settings={settings} />
       </Canvas>
       
       {/* Viewer controls hint - desktop only */}

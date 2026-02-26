@@ -90,7 +90,15 @@ def cleanup_scene(scene_id: str) -> None:
 @router.post("/scenes", response_model=SceneInfo, status_code=201)
 async def create_scene(request: SceneCreate = SceneCreate()):
     """
-    Create a new scene
+    Create a new scene.
+    
+    Scenes are containers for organizing multiple meshes with
+    visibility control and transformation settings.
+    
+    **Parameters:**
+    - `name`: Optional scene name (default: "New Scene")
+    
+    **Returns:** Created scene information
     """
     scene_id = str(uuid.uuid4())[:8]
     
@@ -111,7 +119,11 @@ async def create_scene(request: SceneCreate = SceneCreate()):
 @router.get("/scenes", response_model=List[SceneInfo])
 async def list_scenes():
     """
-    List all scenes
+    List all scenes.
+    
+    Returns all scenes in the scene store.
+    
+    **Returns:** List of scene information
     """
     scenes = []
     for scene_id, data in scene_store.items():
@@ -124,10 +136,15 @@ async def list_scenes():
     return scenes
 
 
-@router.get("/scenes/{scene_id}", response_model=SceneInfo)
+@router.get("/scenes/{scene_id}", response_model=SceneInfo, responses={404: {"model": "ErrorResponse", "description": "Scene not found"}})
 async def get_scene(scene_id: str):
     """
-    Get scene details
+    Get scene details.
+    
+    **Parameters:**
+    - `scene_id`: The unique identifier of the scene
+    
+    **Returns:** Scene information with mesh list
     """
     if scene_id not in scene_store:
         raise HTTPException(status_code=404, detail="Scene not found")
@@ -141,10 +158,17 @@ async def get_scene(scene_id: str):
     )
 
 
-@router.delete("/scenes/{scene_id}")
+@router.delete("/scenes/{scene_id}", responses={404: {"model": "ErrorResponse", "description": "Scene not found"}})
 async def delete_scene(scene_id: str):
     """
-    Delete a scene
+    Delete a scene.
+    
+    Note: This only removes the scene container, not the meshes within it.
+    
+    **Parameters:**
+    - `scene_id`: The unique identifier of the scene
+    
+    **Returns:** Success status
     """
     if scene_id not in scene_store:
         raise HTTPException(status_code=404, detail="Scene not found")
@@ -153,10 +177,16 @@ async def delete_scene(scene_id: str):
     return {"success": True, "message": f"Scene {scene_id} deleted"}
 
 
-@router.post("/scenes/{scene_id}/meshes/{mesh_id}")
+@router.post("/scenes/{scene_id}/meshes/{mesh_id}", responses={404: {"model": "ErrorResponse", "description": "Scene or mesh not found"}})
 async def add_mesh_to_scene(scene_id: str, mesh_id: str):
     """
-    Add a mesh to a scene
+    Add a mesh to a scene.
+    
+    **Parameters:**
+    - `scene_id`: The unique identifier of the scene
+    - `mesh_id`: The unique identifier of the mesh to add
+    
+    **Returns:** Updated mesh list in scene
     """
     if scene_id not in scene_store:
         raise HTTPException(status_code=404, detail="Scene not found")
@@ -181,10 +211,16 @@ async def add_mesh_to_scene(scene_id: str, mesh_id: str):
     }
 
 
-@router.delete("/scenes/{scene_id}/meshes/{mesh_id}")
+@router.delete("/scenes/{scene_id}/meshes/{mesh_id}", responses={404: {"model": "ErrorResponse", "description": "Scene not found"}})
 async def remove_mesh_from_scene(scene_id: str, mesh_id: str):
     """
-    Remove a mesh from a scene
+    Remove a mesh from a scene.
+    
+    **Parameters:**
+    - `scene_id`: The unique identifier of the scene
+    - `mesh_id`: The unique identifier of the mesh to remove
+    
+    **Returns:** Updated mesh list in scene
     """
     if scene_id not in scene_store:
         raise HTTPException(status_code=404, detail="Scene not found")
@@ -207,7 +243,16 @@ async def remove_mesh_from_scene(scene_id: str, mesh_id: str):
 @router.post("/scenes/{scene_id}/meshes/{mesh_id}/visibility")
 async def set_mesh_visibility(scene_id: str, mesh_id: str, visible: bool = True):
     """
-    Set mesh visibility in scene
+    Set mesh visibility in scene.
+    
+    Controls whether a mesh is rendered in the scene.
+    
+    **Parameters:**
+    - `scene_id`: The unique identifier of the scene
+    - `mesh_id`: The unique identifier of the mesh  
+    - `visible`: Whether the mesh should be visible (default: true)
+    
+    **Returns:** Visibility status
     """
     if scene_id not in scene_store:
         raise HTTPException(status_code=404, detail="Scene not found")
@@ -234,7 +279,15 @@ async def set_mesh_visibility(scene_id: str, mesh_id: str, visible: bool = True)
 @router.get("/scenes/{scene_id}/visualize")
 async def visualize_scene(scene_id: str):
     """
-    Get all meshes in scene for visualization
+    Get all meshes in scene for visualization.
+    
+    Returns mesh information for all meshes in the scene,
+    including visibility settings.
+    
+    **Parameters:**
+    - `scene_id`: The unique identifier of the scene
+    
+    **Returns:** Scene visualization data with mesh list
     """
     if scene_id not in scene_store:
         raise HTTPException(status_code=404, detail="Scene not found")
@@ -265,10 +318,23 @@ async def visualize_scene(scene_id: str):
     }
 
 
-@router.post("/merge")
+@router.post("/merge", responses={404: {"model": "ErrorResponse", "description": "Mesh not found"}, 500: {"model": "ErrorResponse", "description": "Merge failed"}})
 async def merge_meshes(request: MergeRequest):
     """
-    Merge multiple meshes into one
+    Merge multiple meshes into one.
+    
+    Combines multiple meshes using boolean operations:
+    - **merge/union**: Combine all meshes into one
+    - **intersect**: Keep only overlapping regions
+    
+    The resulting mesh is saved as a new mesh in the store.
+    
+    **Parameters:**
+    - `mesh_ids`: List of mesh IDs to merge
+    - `operation`: Boolean operation (merge, union, intersect)
+    - `output_name`: Name for the resulting mesh
+    
+    **Returns:** New mesh information
     """
     from app.routes.mesh import mesh_store, MESH_DIR
     
@@ -347,7 +413,11 @@ async def merge_meshes(request: MergeRequest):
 @router.get("/mesh/store")
 async def get_mesh_store():
     """
-    Get all meshes in the mesh store
+    Get all meshes in the mesh store.
+    
+    Debug endpoint to view all meshes currently in memory.
+    
+    **Returns:** List of all meshes with metadata
     """
     from app.routes.mesh import mesh_store
     
