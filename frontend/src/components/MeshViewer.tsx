@@ -1,10 +1,20 @@
-import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Grid, Environment, Center, AxesHelper } from '@react-three/drei'
-import { useMemo, useEffect } from 'react'
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react'
+import { Canvas, useThree, useFrame } from '@react-three/fiber'
+import { 
+  OrbitControls, 
+  Grid, 
+  Environment, 
+  Center,
+  AxesHelper,
+  Html,
+  Line,
+  Text
+} from '@react-three/drei'
+import { useMemo } from 'react'
 import * as THREE from 'three'
 import { motion } from 'framer-motion'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
-import { ViewerSettings, materialPresets, cameraPresets } from '../types/viewer'
+import { ViewerSettings, cameraPresets, Measurement, Annotation } from '../types/viewer'
 
 interface Props {
   meshData: any
@@ -13,27 +23,77 @@ interface Props {
   onSettingsChange: (settings: Partial<ViewerSettings>) => void
 }
 
+// Color map functions
+const colorMaps = {
+  viridis: [
+    [0.267, 0.004, 0.329], [0.282, 0.14, 0.458], [0.254, 0.265, 0.53],
+    [0.192, 0.407, 0.556], [0.126, 0.566, 0.55], [0.199, 0.719, 0.459],
+    [0.564, 0.85, 0.258], [0.993, 0.906, 0.144]
+  ],
+  plasma: [
+    [0.05, 0.03, 0.53], [0.44, 0.05, 0.71], [0.74, 0.2, 0.64],
+    [0.96, 0.41, 0.46], [0.99, 0.65, 0.33], [0.94, 0.89, 0.14]
+  ],
+  inferno: [
+    [0, 0, 0], [0.18, 0.05, 0.2], [0.49, 0.11, 0.19],
+    [0.74, 0.21, 0.13], [0.96, 0.48, 0.15], [0.99, 0.88, 0.27]
+  ],
+  magma: [
+    [0, 0, 0.02], [0.19, 0.06, 0.27], [0.47, 0.14, 0.37],
+    [0.71, 0.22, 0.32], [0.92, 0.38, 0.27], [0.98, 0.68, 0.58]
+  ],
+  rainbow: [
+    [1, 0, 0], [1, 0.5, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [0.5, 0, 1]
+  ]
+}
+
+function getColorFromMap(value: number, mapType: string, min: number, max: number): THREE.Color {
+  const normalized = Math.max(0, Math.min(1, (value - min) / (max - min)))
+  const colors = colorMaps[mapType as keyof typeof colorMaps] || colorMaps.viridis
+  const idx = normalized * (colors.length - 1)
+  const i = Math.floor(idx)
+  const t = idx - i
+  
+  if (i >= colors.length - 1) return new THREE.Color(...colors[colors.length - 1])
+  
+  const c1 = new THREE.Color(...colors[i])
+  const c2 = new THREE.Color(...colors[i + 1])
+  return c1.lerp(c2, t)
+}
+
 function Mesh({ vertices, faces, settings }: { vertices: number[][]; faces: number[][]; settings: ViewerSettings }) {
+  const meshRef = useRef<THREE.Mesh>(null)
+  
   const geometry = useMemo(() => {
     if (!vertices.length) return null
     
     const geo = new THREE.BufferGeometry()
-    
-    // Set vertices
     const positions = new Float32Array(vertices.flat())
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     
-    // Set faces
     if (faces.length) {
       const indices = new Uint32Array(faces.flat())
       geo.setIndex(new THREE.BufferAttribute(indices, 1))
     }
     
     geo.computeVertexNormals()
+    
+    // Calculate vertex colors for color mapping
+    if (settings.colorMapEnabled && vertices.length > 0) {
+      const colors: number[] = []
+      const posAttr = geo.getAttribute('position')
+      
+      for (let i = 0; i < posAttr.count; i++) {
+        const y = posAttr.getY(i)
+        const color = getColorFromMap(y, settings.colorMapType, settings.colorMapMin, settings.colorMapMax)
+        colors.push(color.r, color.g, color.b)
+      }
+      
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3))
+    }
+    
     return geo
-  }, [vertices, faces])
-
-  if (!geometry) return null
+  }, [vertices, faces, settings.colorMapEnabled, settings.colorMapType, settings.colorMapMin, settings.colorMapMax])
 
   // Determine render mode
   const getMaterial = () => {
@@ -43,26 +103,197 @@ function Mesh({ vertices, faces, settings }: { vertices: number[][]; faces: numb
       metalness: settings.metalness,
       roughness: settings.roughness,
       envMapIntensity: 1.2,
+      opacity: settings.opacity,
+      transparent: settings.transparent || settings.opacity < 1,
     }
+
+    const hasVertexColors = settings.colorMapEnabled && vertices.length > 0
 
     switch (settings.viewMode) {
       case 'wireframe':
-        return <meshBasicMaterial color={settings.materialColor} wireframe />
+        return hasVertexColors 
+          ? <meshBasicMaterial vertexColors wireframe toneMapped={false} />
+          : <meshBasicMaterial color={settings.materialColor} wireframe />
       case 'xray':
-        return <meshStandardMaterial {...baseProps} transparent opacity={0.3} depthWrite={false} />
+        return <meshStandardMaterial {...baseProps} transparent opacity={0.3} depthWrite={false} blending={THREE.AdditiveBlending} />
       case 'annotation':
-        return <meshStandardMaterial {...baseProps} />
+        return hasVertexColors
+          ? <meshStandardMaterial {...baseProps} vertexColors toneMapped={false} />
+          : <meshStandardMaterial {...baseProps} />
       default:
-        return <meshStandardMaterial {...baseProps} />
+        return hasVertexColors
+          ? <meshStandardMaterial {...baseProps} vertexColors toneMapped={false} />
+          : <meshStandardMaterial {...baseProps} />
     }
   }
 
+  if (!geometry) return null
+
   return (
     <Center>
-      <mesh geometry={geometry}>
+      <mesh ref={meshRef} geometry={geometry}>
         {getMaterial()}
       </mesh>
     </Center>
+  )
+}
+
+// Measurement Points Component
+function MeasurementPoints({ 
+  settings, 
+  onAddMeasurement 
+}: { 
+  settings: ViewerSettings
+  onAddMeasurement: (m: Measurement) => void
+}) {
+  const { camera } = useThree()
+  const [points, setPoints] = useState<[number, number, number][]>([])
+
+  const handleClick = useCallback((e: any) => {
+    if (settings.measurementMode === 'none') return
+    
+    const point = e.point
+    const newPoints = [...points, [point.x, point.y, point.z] as [number, number, number]]
+    setPoints(newPoints)
+
+    // If we have enough points, create measurement
+    if (settings.measurementMode === 'distance' && newPoints.length === 2) {
+      const p1 = new THREE.Vector3(...newPoints[0])
+      const p2 = new THREE.Vector3(...newPoints[1])
+      const distance = p1.distanceTo(p2)
+      
+      onAddMeasurement({
+        id: Date.now().toString(),
+        type: 'distance',
+        points: newPoints,
+        value: distance,
+        label: `D${settings.measurements.length + 1}`
+      })
+      setPoints([])
+    } else if (settings.measurementMode === 'angle' && newPoints.length === 3) {
+      const p1 = new THREE.Vector3(...newPoints[0])
+      const p2 = new THREE.Vector3(...newPoints[1])
+      const p3 = new THREE.Vector3(...newPoints[2])
+      
+      const v1 = p1.clone().sub(p2)
+      const v2 = p3.clone().sub(p2)
+      const angle = THREE.MathUtils.radToDeg(v1.angleTo(v2))
+      
+      onAddMeasurement({
+        id: Date.now().toString(),
+        type: 'angle',
+        points: newPoints,
+        value: angle,
+        label: `A${settings.measurements.length + 1}`
+      })
+      setPoints([])
+    } else if (settings.measurementMode === 'area' && newPoints.length === 3) {
+      const p1 = new THREE.Vector3(...newPoints[0])
+      const p2 = new THREE.Vector3(...newPoints[1])
+      const p3 = new THREE.Vector3(...newPoints[2])
+      
+      const v1 = p2.clone().sub(p1)
+      const v2 = p3.clone().sub(p1)
+      const cross = new THREE.Vector3().crossVectors(v1, v2)
+      const area = cross.length() / 2
+      
+      onAddMeasurement({
+        id: Date.now().toString(),
+        type: 'area',
+        points: newPoints,
+        value: area,
+        label: `Area${settings.measurements.length + 1}`
+      })
+      setPoints([])
+    }
+  }, [points, settings.measurementMode, settings.measurements.length, onAddMeasurement])
+
+  if (settings.measurementMode === 'none') return null
+
+  return (
+    <group>
+      {points.map((p, i) => (
+        <mesh key={i} position={p} onClick={handleClick}>
+          <sphereGeometry args={[0.05, 16, 16]} />
+          <meshBasicMaterial color="#ff6b6b" />
+        </mesh>
+      ))}
+      {points.length > 1 && (
+        <Line
+          points={points}
+          color="#ff6b6b"
+          lineWidth={2}
+        />
+      )}
+    </group>
+  )
+}
+
+// Measurement Labels Component
+function MeasurementLabels({ measurements }: { measurements: Measurement[] }) {
+  return (
+    <>
+      {measurements.map((m) => {
+        if (m.type === 'distance' && m.points.length === 2) {
+          const mid = [
+            (m.points[0][0] + m.points[1][0]) / 2,
+            (m.points[0][1] + m.points[1][1]) / 2,
+            (m.points[0][2] + m.points[1][2]) / 2
+          ] as [number, number, number]
+          
+          return (
+            <Html key={m.id} position={mid} center>
+              <div className="bg-black/80 text-white px-2 py-1 rounded text-xs whitespace-nowrap">
+                {m.value.toFixed(2)}
+              </div>
+            </Html>
+          )
+        }
+        
+        if (m.type === 'angle' && m.points.length === 3) {
+          return (
+            <Html key={m.id} position={m.points[1]} center>
+              <div className="bg-black/80 text-white px-2 py-1 rounded text-xs whitespace-nowrap">
+                {m.value.toFixed(1)}°
+              </div>
+            </Html>
+          )
+        }
+        
+        if (m.type === 'area' && m.points.length === 3) {
+          const center = [
+            (m.points[0][0] + m.points[1][0] + m.points[2][0]) / 3,
+            (m.points[0][1] + m.points[1][1] + m.points[2][1]) / 3,
+            (m.points[0][2] + m.points[1][2] + m.points[2][2]) / 3
+          ] as [number, number, number]
+          
+          return (
+            <Html key={m.id} position={center} center>
+              <div className="bg-black/80 text-white px-2 py-1 rounded text-xs whitespace-nowrap">
+                {m.value.toFixed(2)}
+              </div>
+            </Html>
+          )
+        }
+        
+        return null
+      })}
+    </>
+  )
+}
+
+// Annotations Component
+function Annotations({ annotations }: { annotations: Annotation[] }) {
+  return (
+    <>
+      {annotations.filter(a => a.visible).map((a) => (
+        <Html key={a.id} position={a.position} center>
+          <div className="bg-cyan-500/90 text-white px-2 py-1 rounded text-xs max-w-[150px]">
+            {a.text}
+          </div>
+        </Html>
+      ))}
+    </>
   )
 }
 
@@ -192,7 +423,124 @@ function LoadingState() {
   )
 }
 
+// Screenshot functionality hook
+function useScreenshot() {
+  const { gl, scene, camera } = useThree()
+  
+  const takeScreenshot = useCallback(() => {
+    gl.render(scene, camera)
+    const dataUrl = gl.domElement.toDataURL('image/png')
+    
+    // Create download link
+    const link = document.createElement('a')
+    link.download = `vedo-screenshot-${Date.now()}.png`
+    link.href = dataUrl
+    link.click()
+  }, [gl, scene, camera])
+  
+  return takeScreenshot
+}
+
+// Scene Content Component
+function SceneContent({ 
+  meshData, 
+  settings, 
+  onAddMeasurement 
+}: { 
+  meshData: any
+  settings: ViewerSettings
+  onAddMeasurement: (m: Measurement) => void
+}) {
+  const takeScreenshot = useScreenshot()
+  
+  // Expose screenshot function globally
+  useEffect(() => {
+    (window as any).vedoTakeScreenshot = takeScreenshot
+  }, [takeScreenshot])
+  
+  const preset = settings.cameraPreset
+  const cameraConfig = useMemo(() => {
+    return cameraPresets[preset] || cameraPresets.free
+  }, [preset])
+
+  return (
+    <>
+      <color attach="background" args={['#0a0a0b']} />
+      
+      {/* Lighting */}
+      <ambientLight intensity={settings.ambientIntensity} />
+      <directionalLight 
+        position={settings.directionalPosition} 
+        intensity={settings.directionalIntensity} 
+        castShadow={settings.enableShadows}
+      />
+      <directionalLight 
+        position={[-8, -5, -5]} 
+        intensity={0.4} 
+        color="#4de7ff" 
+      />
+      <pointLight 
+        position={settings.pointPosition} 
+        intensity={settings.pointIntensity} 
+        color="#00d4ff" 
+      />
+      
+      {/* Grid */}
+      {settings.showGrid && (
+        <Grid 
+          infiniteGrid 
+          cellSize={0.5} 
+          sectionSize={2} 
+          fadeDistance={40}
+          cellColor="#1a1a1d"
+          sectionColor="#252528"
+        />
+      )}
+      
+      {/* Axes */}
+      {settings.showAxes && (
+        <axesHelper args={[5]} />
+      )}
+      
+      {/* Mesh */}
+      <Mesh 
+        vertices={meshData?.visualize?.vertices || []} 
+        faces={meshData?.visualize?.faces || []}
+        settings={settings}
+      />
+      
+      {/* Measurement Tools */}
+      <MeasurementPoints 
+        settings={settings}
+        onAddMeasurement={onAddMeasurement}
+      />
+      <MeasurementLabels measurements={settings.measurements} />
+      
+      {/* Annotations */}
+      <Annotations annotations={settings.annotations} />
+      
+      <Environment preset="city" />
+      <OrbitControls 
+        makeDefault 
+        enableDamping
+        dampingFactor={0.05}
+        rotateSpeed={0.5}
+        zoomSpeed={0.8}
+        minDistance={1}
+        maxDistance={20}
+      />
+    </>
+  )
+}
+
 export default function MeshViewer({ meshData, loading, settings, onSettingsChange }: Props) {
+  // Handle add measurement
+  const handleAddMeasurement = useCallback((m: Measurement) => {
+    onSettingsChange({
+      measurements: [...settings.measurements, m]
+    })
+  }, [settings.measurements, onSettingsChange])
+
   // Camera preset handling
   const cameraConfig = useMemo(() => {
     return cameraPresets[settings.cameraPreset] || cameraPresets.free
@@ -204,6 +552,14 @@ export default function MeshViewer({ meshData, loading, settings, onSettingsChan
     { key: '-', handler: () => {}, description: 'Zoom out' },
   ])
 
+  if (loading) {
+    return <LoadingState />
+  }
+
+  if (!meshData) {
+    return <EmptyState />
+  }
+
   return (
     <>
       <Canvas 
@@ -211,52 +567,10 @@ export default function MeshViewer({ meshData, loading, settings, onSettingsChan
         gl={{ antialias: true, alpha: true }}
         dpr={[1, 2]}
       >
-        <color attach="background" args={['#0a0a0b']} />
-        
-        {/* Premium lighting setup */}
-        <ambientLight intensity={settings.ambientIntensity} />
-        <directionalLight 
-          position={settings.directionalPosition} 
-          intensity={settings.directionalIntensity} 
-          castShadow={settings.enableShadows}
-        />
-        <directionalLight position={[-8, -5, -5]} intensity={0.4} color="#4de7ff" />
-        <pointLight 
-          position={settings.pointPosition} 
-          intensity={settings.pointIntensity} 
-          color="#00d4ff" 
-        />
-        
-        <Mesh 
-          vertices={meshData?.visualize?.vertices || []} 
-          faces={meshData?.visualize?.faces || []} 
+        <SceneContent 
+          meshData={meshData} 
           settings={settings}
-        />
-        
-        {/* Grid */}
-        {settings.showGrid && (
-          <Grid 
-            infiniteGrid 
-            cellSize={0.5} 
-            sectionSize={2} 
-            fadeDistance={40}
-            cellColor="#1a1a1d"
-            sectionColor="#252528"
-          />
-        )}
-        
-        {/* Axes */}
-        {settings.showAxes && <AxesHelper size={5} />}
-        
-        <Environment preset="city" />
-        <OrbitControls 
-          makeDefault 
-          enableDamping
-          dampingFactor={0.05}
-          rotateSpeed={0.5}
-          zoomSpeed={0.8}
-          minDistance={1}
-          maxDistance={20}
+          onAddMeasurement={handleAddMeasurement}
         />
       </Canvas>
       
