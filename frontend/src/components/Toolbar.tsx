@@ -18,7 +18,7 @@ import {
   ChartPie,
   Download
 } from '@phosphor-icons/react'
-import axios from 'axios'
+import axios, { AxiosError } from 'axios'
 
 // API base URL - could be moved to environment config
 const API_BASE_URL = 'http://localhost:8000'
@@ -27,6 +27,15 @@ interface Props {
   meshId: string
   onUpdate: (data: unknown) => void
   onAnalysisResult?: (result: unknown) => void
+  canUndo?: boolean
+  canRedo?: boolean
+  onUndo?: () => void
+  onRedo?: () => void
+  onError?: (message: string) => void
+  onProgress?: (id: string, progress: number, message?: string) => void
+  onOperationComplete?: (id: string, message?: string) => void
+  onOperationFail?: (id: string, error: string) => void
+  startOperation?: (type: 'upload' | 'transform' | 'analysis' | 'quality' | 'curvature' | 'slice' | 'boolean' | 'split' | 'merge', message?: string) => string
 }
 
 interface ToolButtonProps {
@@ -143,7 +152,20 @@ function debounce<T extends (...args: Parameters<T>) => void>(
 // Toolbar Component
 // ============================================================================
 
-function ToolbarComponent({ meshId, onUpdate, onAnalysisResult }: Props) {
+function ToolbarComponent({ 
+  meshId, 
+  onUpdate, 
+  onAnalysisResult, 
+  canUndo, 
+  canRedo, 
+  onUndo, 
+  onRedo,
+  onError,
+  onProgress,
+  onOperationComplete,
+  onOperationFail,
+  startOperation
+}: Props) {
   const [loading, setLoading] = useState(false)
   const [transformMode, setTransformMode] = useState('rotate')
   const [sliceModalOpen, setSliceModalOpen] = useState(false)
@@ -201,7 +223,19 @@ function ToolbarComponent({ meshId, onUpdate, onAnalysisResult }: Props) {
     abortControllerRef.current = new AbortController()
     
     setLoading(true)
+    
+    // Start operation tracking
+    let operationId: string | null = null
+    if (startOperation) {
+      operationId = startOperation('transform', `Applying ${op}...`)
+    }
+    
     try {
+      // Simulate progress for transform operations
+      if (onProgress && operationId) {
+        onProgress(operationId, 30, `Applying ${op}...`)
+      }
+      
       await axios.post(`${API_BASE_URL}/mesh/${meshId}/transform`, {
         operation: op,
         params
@@ -209,18 +243,44 @@ function ToolbarComponent({ meshId, onUpdate, onAnalysisResult }: Props) {
         signal: abortControllerRef.current.signal
       })
       
+      if (onProgress && operationId) {
+        onProgress(operationId, 70, 'Fetching results...')
+      }
+      
       const { data } = await axios.get(`${API_BASE_URL}/mesh/${meshId}/analyze`, {
         signal: abortControllerRef.current.signal
       })
+      
+      if (onOperationComplete && operationId) {
+        onOperationComplete(operationId, `${op} applied successfully`)
+      }
+      
       onUpdate(data)
     } catch (err) {
       if (!axios.isCancel(err)) {
         console.error('Transform error:', err)
+        
+        let errorMessage = 'Failed to apply transform'
+        if (err instanceof AxiosError) {
+          if (!err.response) {
+            errorMessage = 'Unable to connect to server'
+          } else {
+            errorMessage = err.response.data?.detail || 'Failed to apply transform'
+          }
+        }
+        
+        if (onOperationFail && operationId) {
+          onOperationFail(operationId, errorMessage)
+        }
+        
+        if (onError) {
+          onError(errorMessage)
+        }
       }
     } finally {
       setLoading(false)
     }
-  }, [meshId, onUpdate])
+  }, [meshId, onUpdate, onError, onProgress, onOperationComplete, onOperationFail, startOperation])
 
   // Debounced version
   const debouncedTransform = useCallback(
@@ -262,48 +322,122 @@ function ToolbarComponent({ meshId, onUpdate, onAnalysisResult }: Props) {
   // Slicing operation
   const handleSlice = useCallback(async () => {
     setLoading(true)
+    
+    // Start operation tracking
+    let operationId: string | null = null
+    if (startOperation) {
+      operationId = startOperation('slice', 'Slicing mesh...')
+    }
+    
     try {
+      if (onProgress && operationId) {
+        onProgress(operationId, 30, 'Slicing mesh...')
+      }
+      
       const { data } = await axios.post(`${API_BASE_URL}/mesh/${meshId}/slice`, {
         axis: sliceAxis,
         position: slicePosition,
         invert: false
       })
       
+      if (onProgress && operationId) {
+        onProgress(operationId, 70, 'Processing results...')
+      }
+      
       if (data.new_mesh_id) {
         // Refresh data with new mesh
         const { data: newData } = await axios.get(`${API_BASE_URL}/mesh/${data.new_mesh_id}/analyze`)
         onUpdate(newData)
       }
+      
+      if (onOperationComplete && operationId) {
+        onOperationComplete(operationId, 'Mesh sliced successfully')
+      }
+      
       setSliceModalOpen(false)
     } catch (err) {
       console.error('Slice error:', err)
+      
+      let errorMessage = 'Failed to slice mesh'
+      if (err instanceof AxiosError) {
+        if (!err.response) {
+          errorMessage = 'Unable to connect to server'
+        } else {
+          errorMessage = err.response.data?.detail || 'Failed to slice mesh'
+        }
+      }
+      
+      if (onOperationFail && operationId) {
+        onOperationFail(operationId, errorMessage)
+      }
+      
+      if (onError) {
+        onError(errorMessage)
+      }
     } finally {
       setLoading(false)
     }
-  }, [meshId, sliceAxis, slicePosition, onUpdate])
+  }, [meshId, sliceAxis, slicePosition, onUpdate, onError, onProgress, onOperationComplete, onOperationFail, startOperation])
 
   // Boolean operations
   const handleBoolean = useCallback(async (operation: string) => {
     if (!booleanMeshId) return
     
     setLoading(true)
+    
+    // Start operation tracking
+    let operationId: string | null = null
+    if (startOperation) {
+      operationId = startOperation('boolean', `Performing ${operation}...`)
+    }
+    
     try {
+      if (onProgress && operationId) {
+        onProgress(operationId, 30, `Performing ${operation}...`)
+      }
+      
       const { data } = await axios.post(`${API_BASE_URL}/mesh/${meshId}/boolean`, {
         operation,
         mesh_id_2: booleanMeshId
       })
       
+      if (onProgress && operationId) {
+        onProgress(operationId, 70, 'Processing results...')
+      }
+      
       if (data.new_mesh_id) {
         const { data: newData } = await axios.get(`${API_BASE_URL}/mesh/${data.new_mesh_id}/analyze`)
         onUpdate(newData)
       }
+      
+      if (onOperationComplete && operationId) {
+        onOperationComplete(operationId, `Boolean ${operation} complete`)
+      }
+      
       setBooleanModalOpen(false)
     } catch (err) {
       console.error('Boolean error:', err)
+      
+      let errorMessage = 'Failed to perform boolean operation'
+      if (err instanceof AxiosError) {
+        if (!err.response) {
+          errorMessage = 'Unable to connect to server'
+        } else {
+          errorMessage = err.response.data?.detail || 'Failed to perform boolean operation'
+        }
+      }
+      
+      if (onOperationFail && operationId) {
+        onOperationFail(operationId, errorMessage)
+      }
+      
+      if (onError) {
+        onError(errorMessage)
+      }
     } finally {
       setLoading(false)
     }
-  }, [meshId, booleanMeshId, onUpdate])
+  }, [meshId, booleanMeshId, onUpdate, onError, onProgress, onOperationComplete, onOperationFail, startOperation])
 
   // Curvature analysis
   const handleCurvature = useCallback(async (method: string) => {
@@ -437,6 +571,42 @@ function ToolbarComponent({ meshId, onUpdate, onAnalysisResult }: Props) {
 
   return (
     <div className="glass-light rounded-xl p-4 animate-scale-in">
+      {/* Undo/Redo Controls */}
+      {(canUndo !== undefined || canRedo !== undefined) && (
+        <Group justify="space-between" mb="md">
+          <Text size="sm" fw={600}>History</Text>
+          <Group gap={4}>
+            <Tooltip label="Undo (Ctrl+Z)">
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="md"
+                onClick={onUndo}
+                disabled={!canUndo}
+                className="transition-all duration-200 hover:bg-white/5 disabled:opacity-30"
+              >
+                <ArrowCounterClockwise size={18} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Redo (Ctrl+Shift+Z)">
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="md"
+                onClick={onRedo}
+                disabled={!canRedo}
+                className="transition-all duration-200 hover:bg-white/5 disabled:opacity-30"
+              >
+                <ArrowClockwise size={18} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+        </Group>
+      )}
+
+      {/* Conditional divider if history controls shown */}
+      {(canUndo !== undefined || canRedo !== undefined) && <Divider my="sm" color="white/5" />}
+
       {/* Transform Mode Selector */}
       <Group justify="space-between" mb="md">
         <Text size="sm" fw={600}>Transform</Text>
