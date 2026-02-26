@@ -852,23 +852,24 @@ function AppContent() {
           </div>
         )}
         
-        {/* Header - Asymmetric design with gradient accent */}
+        {/* Header - Premium asymmetric design */}
         <header className="h-16 glass border-b border-white/5 flex items-center justify-between px-6 relative overflow-hidden">
-          {/* Decorative gradient orb */}
-          <div className="absolute top-0 right-20 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
+          {/* Decorative gradient orbs */}
+          <div className="absolute top-0 right-32 w-40 h-40 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-1/4 w-24 h-24 bg-purple-500/3 rounded-full blur-2xl pointer-events-none" />
           
           <motion.div 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-4"
+            className="flex items-center gap-4 relative z-10"
           >
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500/20 to-cyan-600/10 border border-cyan-500/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-600/10 border border-cyan-500/20 flex items-center justify-center shadow-glow-sm">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-cyan-400">
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
               </svg>
             </div>
             <div>
-              <h1 className="text-lg font-semibold tracking-tight">Vedo WebApp</h1>
+              <h1 className="text-base font-semibold tracking-tight text-gray-100">Vedo WebApp</h1>
               <p className="text-xs text-gray-500 -mt-0.5">3D Mesh Viewer</p>
             </div>
           </motion.div>
@@ -877,13 +878,13 @@ function AppContent() {
           <motion.div 
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-3"
+            className="flex items-center gap-4 relative z-10"
           >
             {/* Tablet sidebar toggle */}
             {isTablet && (
               <button
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                className="text-xs text-gray-500 hover:text-gray-400 transition-colors p-2 rounded hover:bg-white/5"
+                className="text-xs text-gray-500 hover:text-gray-300 transition-all duration-200 p-2 rounded-xl hover:bg-white/5"
                 title={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -897,25 +898,25 @@ function AppContent() {
             )}
             <button
               onClick={() => setShortcutsModalOpen(true)}
-              className="text-xs text-gray-500 hover:text-gray-400 transition-colors px-2 py-1 rounded hover:bg-white/5"
+              className="text-xs text-gray-500 hover:text-gray-300 transition-all duration-200 px-2.5 py-1.5 rounded-xl hover:bg-white/5"
               title="Keyboard shortcuts (?)"
             >
-              <kbd className="px-1.5 py-0.5 bg-white/5 rounded text-gray-500 text-[10px]">?</kbd>
+              <kbd className="px-2 py-1 bg-white/[0.05] rounded-lg text-gray-400 text-[10px] font-mono border border-white/5">?</kbd>
             </button>
             {/* Storage/Projects button */}
             <button
               onClick={() => setStoragePanelOpen(true)}
-              className="text-xs text-gray-500 hover:text-gray-400 transition-colors px-2 py-1 rounded hover:bg-white/5"
+              className="text-xs text-gray-500 hover:text-gray-300 transition-all duration-200 p-2 rounded-xl hover:bg-white/5"
               title="Storage & Projects"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
               </svg>
             </button>
             {currentProjectName && (
-              <span className="text-xs text-cyan-400/70">{currentProjectName}</span>
+              <span className="text-xs text-cyan-400/80 px-2 py-1 bg-cyan-500/10 rounded-lg">{currentProjectName}</span>
             )}
-            <div className={`w-2 h-2 rounded-full ${loading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
+            <div className={`w-2 h-2 rounded-full ${loading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]'}`} />
             <span className="text-xs text-gray-500">{loading ? 'Processing...' : 'Ready'}</span>
           </motion.div>
         </header>
@@ -929,11 +930,11 @@ function AppContent() {
             />
           )}
           
-          {/* Sidebar - Creative asymmetric layout */}
+          {/* Sidebar - Premium asymmetric layout */}
           {/* Tablet: collapsed by default, Mobile: hidden (bottom sheet instead) */}
           <aside className={`
             border-r border-white/5 p-5 flex flex-col gap-5 overflow-y-auto
-            transition-all duration-300 ease-in-out
+            transition-all duration-500 ease-in-out
             ${isMobile ? 'hidden' : ''}
             ${isTablet ? (sidebarCollapsed ? 'w-0 p-0 overflow-hidden' : 'w-80') : 'w-80'}
           `}>

@@ -165,18 +165,58 @@ export default function StoragePanel({
       <Modal
         opened={opened}
         onClose={onClose}
-        title="Storage & Projects"
-        size="md"
-        styles={{
-          header: { backgroundColor: '#1A1B1E' },
-          body: { backgroundColor: '#1A1B1E' }
+        title={
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/10 to-transparent border border-cyan-500/20 flex items-center justify-center">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-cyan-400">
+                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+              </svg>
+            </div>
+            <span className="font-semibold">Storage & Projects</span>
+          </div>
+        }
+        size="lg"
+        radius="lg"
+        padding="lg"
+        classNames={{
+          header: 'glass border-b border-white/5',
+          content: 'glass-card',
+          body: 'p-0'
         }}
       >
         {/* Tab Navigation */}
-        <Group gap="xs" mb="md">
-          <Button
-            variant={activeTab === 'recent' ? 'filled' : 'subtle'}
-            size="xs"
+        <div className="flex gap-2 mb-6 p-1 bg-white/[0.02] rounded-xl border border-white/5">
+          <button
+            onClick={() => setActiveTab('recent')}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
+              activeTab === 'recent' 
+                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' 
+                : 'text-gray-400 hover:text-gray-300 hover:bg-white/[0.03]'
+            }`}
+          >
+            Recent
+          </button>
+          <button
+            onClick={() => setActiveTab('projects')}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
+              activeTab === 'projects' 
+                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' 
+                : 'text-gray-400 hover:text-gray-300 hover:bg-white/[0.03]'
+            }`}
+          >
+            Projects
+          </button>
+          <button
+            onClick={() => setActiveTab('import')}
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
+              activeTab === 'import' 
+                ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20' 
+                : 'text-gray-400 hover:text-gray-300 hover:bg-white/[0.03]'
+            }`}
+          >
+            Import
+          </button>
+        </div>
             onClick={() => setActiveTab('recent')}
             color={activeTab === 'recent' ? 'cyan' : 'gray'}
           >

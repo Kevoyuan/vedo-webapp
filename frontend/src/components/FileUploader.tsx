@@ -222,10 +222,10 @@ function FileUploaderComponent({
   return (
     <div 
       className={`
-        relative rounded-xl border-2 transition-all duration-300 overflow-hidden
+        relative rounded-2xl border-2 transition-all duration-500 overflow-hidden
         ${dragActive 
-          ? 'border-cyan-400 bg-cyan-500/5' 
-          : 'border-white/5 bg-[#111113] hover:border-white/10'
+          ? 'border-cyan-400 bg-cyan-400/5 shadow-glow' 
+          : 'border-white/5 bg-gradient-to-br from-white/[0.02] to-transparent hover:border-white/10 hover:shadow-card'
         }
       `}
       onDragEnter={handleDrag}
@@ -233,30 +233,46 @@ function FileUploaderComponent({
       onDragOver={handleDrag}
       onDrop={handleDrop}
     >
-      {/* Gradient overlay */}
-      <div className={`absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent opacity-0 transition-opacity duration-300 ${dragActive ? 'opacity-100' : ''}`} />
+      {/* Animated gradient overlay */}
+      <div className={`
+        absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-transparent to-blue-500/10 
+        opacity-0 transition-opacity duration-500 ${dragActive ? 'opacity-100' : ''}
+        animate-pulse
+      `} />
+      
+      {/* Corner accents */}
+      <div className={`absolute top-0 left-0 w-12 h-12 border-l-2 border-t-2 border-cyan-400/0 transition-all duration-300 ${dragActive ? 'border-cyan-400/50' : ''} rounded-tl-2xl`} />
+      <div className={`absolute top-0 right-0 w-12 h-12 border-r-2 border-t-2 border-cyan-400/0 transition-all duration-300 ${dragActive ? 'border-cyan-400/50' : ''} rounded-tr-2xl`} />
+      <div className={`absolute bottom-0 left-0 w-12 h-12 border-l-2 border-b-2 border-cyan-400/0 transition-all duration-300 ${dragActive ? 'border-cyan-400/50' : ''} rounded-bl-2xl`} />
+      <div className={`absolute bottom-0 right-0 w-12 h-12 border-r-2 border-b-2 border-cyan-400/0 transition-all duration-300 ${dragActive ? 'border-cyan-400/50' : ''} rounded-br-2xl`} />
       
       <div className="relative p-6 text-center">
         {/* Upload icon with animated ring */}
         <div className={`
-          relative w-14 h-14 mx-auto mb-4 rounded-xl flex items-center justify-center
-          transition-all duration-300
-          ${dragActive ? 'bg-cyan-500/20' : 'bg-white/5'}
+          relative w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center
+          transition-all duration-500 group
+          ${dragActive ? 'bg-cyan-500/20 scale-110' : 'bg-white/[0.03] hover:bg-white/[0.06]'}
         `}>
+          {/* Animated ring */}
           <div className={`
-            absolute inset-0 rounded-xl border transition-all duration-300
-            ${dragActive ? 'border-cyan-400/50' : 'border-white/5'}
+            absolute inset-0 rounded-2xl border-2 transition-all duration-500
+            ${dragActive ? 'border-cyan-400 scale-100 opacity-100' : 'border-white/5 scale-90 opacity-0'}
+          `} />
+          <div className={`
+            absolute inset-[-4px] rounded-[18px] border border-cyan-400/0 transition-all duration-500
+            ${dragActive ? 'border-cyan-300/30 animate-ping' : ''}
           `} />
           <Upload 
-            size={24} 
-            className={`transition-colors duration-300 ${dragActive ? 'text-cyan-400' : 'text-gray-500'}`} 
+            size={28} 
+            weight="duotone"
+            className={`transition-all duration-300 ${dragActive ? 'text-cyan-400 scale-110' : 'text-gray-500 group-hover:text-gray-400'}`} 
           />
         </div>
 
-        <p className="text-sm text-gray-400 mb-1">
+        <p className="text-sm text-gray-300 mb-1 font-medium">
           {dragActive ? 'Drop your file here' : 'Drag & drop mesh file'}
         </p>
-        <p className="text-xs text-gray-600 mb-4">
+        <p className="text-xs text-gray-500 mb-4">
           {detectedFormat || 'or click to browse'}
         </p>
         
@@ -268,48 +284,56 @@ function FileUploaderComponent({
             className="hidden"
             onChange={handleInputChange}
           />
-          <Button 
-            component="span" 
-            loading={loading}
-            variant="gradient"
-            gradient={{ from: 'cyan', to: 'blue', deg: 135 }}
-            size="sm"
-            className="cursor-pointer transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98]"
-            styles={{
-              root: {
-                background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.15) 0%, rgba(0, 180, 216, 0.15) 100%)',
-                border: '1px solid rgba(0, 212, 255, 0.2)',
-                '&:hover': {
-                  background: 'linear-gradient(135deg, rgba(0, 212, 255, 0.25) 0%, rgba(0, 180, 216, 0.25) 100%)',
-                }
+          <button 
+            type="button"
+            className={`
+              px-6 py-2.5 rounded-xl font-medium text-sm
+              transition-all duration-300 cursor-pointer
+              ${loading 
+                ? 'bg-cyan-500/10 text-cyan-400 cursor-wait' 
+                : 'btn-primary hover:shadow-glow hover:scale-[1.02] active:scale-[0.98]'
               }
-            }}
+            `}
+            disabled={loading}
           >
-            {loading ? 'Uploading...' : 'Select File'}
-          </Button>
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Uploading...
+              </span>
+            ) : (
+              'Select File'
+            )}
+          </button>
         </label>
         
         {/* Upload progress bar */}
         {loading && uploadProgress > 0 && (
           <div className="mt-4 animate-fade-in">
-            <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-white/[0.05] rounded-full overflow-hidden">
               <div 
-                className="h-full bg-gradient-to-r from-cyan-500 to-cyan-400 transition-all duration-300"
+                className="h-full bg-gradient-to-r from-cyan-500 via-cyan-400 to-cyan-500 transition-all duration-300 rounded-full"
                 style={{ width: `${uploadProgress}%` }}
-              />
+              >
+                <div className="h-full w-full bg-white/30 animate-shimmer" style={{ backgroundSize: '200% 100%' }} />
+              </div>
             </div>
-            <p className="text-xs text-gray-500 mt-2">{uploadProgress}%</p>
+            <p className="text-xs text-gray-500 mt-2 font-medium">{uploadProgress}%</p>
           </div>
         )}
         
         {/* Supported formats */}
         <div className="mt-5 pt-4 border-t border-white/5">
-          <p className="text-xs text-gray-600 mb-2">Supported formats</p>
+          <p className="text-xs text-gray-500 mb-2">Supported formats</p>
           <div className="flex flex-wrap justify-center gap-1.5">
-            {SUPPORTED_FORMATS.map((ext) => (
+            {SUPPORTED_FORMATS.map((ext, i) => (
               <span 
                 key={ext}
-                className="px-2 py-0.5 text-[10px] bg-white/[0.03] text-gray-500 rounded"
+                className="px-2.5 py-1 text-[10px] font-medium bg-white/[0.03] text-gray-400 rounded-lg border border-white/5 hover:border-cyan-400/20 hover:text-cyan-400/70 transition-all duration-200"
+                style={{ animationDelay: `${i * 30}ms` }}
               >
                 {ext}
               </span>

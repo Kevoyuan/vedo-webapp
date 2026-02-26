@@ -1,5 +1,4 @@
 import { memo, useMemo } from 'react'
-import { Card, Text, Group, Stack, Badge } from '@mantine/core'
 import { Cube, Polygon, Ruler, Waves } from '@phosphor-icons/react'
 import type { MeshData } from '../types'
 
@@ -19,25 +18,25 @@ interface StatItemProps {
  */
 const StatItem = memo(function StatItem({ icon, label, value, accent }: StatItemProps) {
   return (
-    <Group gap="sm" className="group">
+    <div className="group flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:border-cyan-400/20 transition-all duration-300 hover:bg-white/[0.03]">
       <div className={`
-        w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-300
+        w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300
         ${accent 
-          ? 'bg-cyan-500/10 text-cyan-400' 
-          : 'bg-white/5 text-gray-500 group-hover:bg-white/10 group-hover:text-gray-400'
+          ? 'bg-cyan-500/10 text-cyan-400 shadow-glow-sm' 
+          : 'bg-white/[0.03] text-gray-500 group-hover:bg-white/[0.05] group-hover:text-gray-400'
         }
       `}>
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        <Text size="xs" c="dimmed" className="transition-colors duration-300 group-hover:text-gray-400">
+        <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-0.5 transition-colors duration-300 group-hover:text-gray-400">
           {label}
-        </Text>
-        <Text size="sm" fw={500} className="truncate">
+        </p>
+        <p className="text-sm font-semibold text-gray-200 truncate">
           {value}
-        </Text>
+        </p>
       </div>
-    </Group>
+    </div>
   )
 })
 
@@ -72,47 +71,43 @@ function MeshInfoComponent({ data }: Props) {
   }), [data])
 
   return (
-    <Card 
-      withBorder 
-      bg="transparent" 
-      className="glass-light rounded-xl overflow-hidden animate-scale-in"
-      padding="lg"
-    >
+    <div className="glass-card p-5 animate-scale-in">
       {/* Header with accent */}
-      <Group justify="space-between" mb="md">
-        <Group gap="sm">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/20 to-transparent border border-cyan-500/20 flex items-center justify-center">
-            <Cube size={16} className="text-cyan-400" />
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-600/10 border border-cyan-500/20 flex items-center justify-center shadow-glow-sm">
+            <Cube size={20} weight="duotone" className="text-cyan-400" />
           </div>
-          <Text size="sm" fw={600}>Mesh Info</Text>
-        </Group>
-        <Badge 
-          size="xs" 
-          variant="light" 
-          color="cyan"
-          className="animate-fade-in"
-        >
-          {data.type || 'Loaded'}
-        </Badge>
-      </Group>
+          <div>
+            <p className="text-sm font-semibold text-gray-200">Mesh Info</p>
+            <p className="text-xs text-gray-500">{data.filename || 'Untitled'}</p>
+          </div>
+        </div>
+        <div className="px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+          <p className="text-[10px] font-medium text-cyan-400 uppercase tracking-wider">
+            {data.type || 'Loaded'}
+          </p>
+        </div>
+      </div>
       
-      <Stack gap="md">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 gap-3">
         <StatItem 
-          icon={<Cube size={14} />}
+          icon={<Cube size={16} weight="duotone" />}
           label="Vertices"
           value={stats.vertices}
           accent
         />
         
         <StatItem 
-          icon={<Polygon size={14} />}
+          icon={<Polygon size={16} weight="duotone" />}
           label="Faces"
           value={stats.faces}
         />
         
         {stats.volume && (
           <StatItem 
-            icon={<Waves size={14} />}
+            icon={<Waves size={16} weight="duotone" />}
             label="Volume"
             value={stats.volume}
             accent
@@ -121,32 +116,35 @@ function MeshInfoComponent({ data }: Props) {
         
         {stats.area && (
           <StatItem 
-            icon={<Ruler size={14} />}
+            icon={<Ruler size={16} weight="duotone" />}
             label="Surface Area"
             value={stats.area}
           />
         )}
+      </div>
 
-        {stats.bounds && (
-          <div className="pt-2 border-t border-white/5">
-            <Text size="xs" c="dimmed" mb="xs">Bounding Box</Text>
-            <Group gap="xs">
-              {['X', 'Y', 'Z'].map((axis, i) => (
-                <div 
-                  key={axis}
-                  className="flex-1 px-2 py-1.5 bg-white/[0.03] rounded-lg text-center"
-                >
-                  <Text size="xs" c="dimmed">{axis}</Text>
-                  <Text size="xs" fw={500}>
-                    {stats.bounds[i]?.toFixed(2) || '0.00'}
-                  </Text>
+      {stats.bounds && (
+        <div className="mt-4 pt-4 border-t border-white/5">
+          <p className="text-xs text-gray-500 mb-3 font-medium">Bounding Box</p>
+          <div className="flex gap-2">
+            {['X', 'Y', 'Z'].map((axis, i) => (
+              <div 
+                key={axis}
+                className="flex-1 px-3 py-2.5 bg-white/[0.02] rounded-xl border border-white/5 hover:border-cyan-400/20 transition-all duration-300"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-medium text-gray-500 uppercase">{axis}</span>
+                  <div className={`w-1.5 h-1.5 rounded-full ${i === 0 ? 'bg-cyan-400/60' : i === 1 ? 'bg-purple-400/60' : 'bg-emerald-400/60'}`} />
                 </div>
-              ))}
-            </Group>
+                <p className="text-sm font-semibold text-gray-200">
+                  {stats.bounds[i]?.toFixed(2) || '0.00'}
+                </p>
+              </div>
+            ))}
           </div>
-        )}
-      </Stack>
-    </Card>
+        </div>
+      )}
+    </div>
   )
 }
 

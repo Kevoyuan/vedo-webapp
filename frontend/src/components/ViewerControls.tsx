@@ -5,18 +5,14 @@ import {
   SegmentedControl,
   Select,
   Slider,
-  Text,
   Divider,
-  Collapse,
   Button,
   Badge,
   Popover,
   Stack,
-  NumberInput,
-  ColorSwatch,
   Group,
-  Box,
-  Tabs
+  NumberInput,
+  ColorSwatch
 } from '@mantine/core'
 import { 
   SquaresFour, 
@@ -73,8 +69,13 @@ export default function ViewerControls({
   }
 
   return (
-    <div className="glass-light rounded-xl p-4 space-y-3 animate-scale-in">
-      <Text size="sm" fw={600} mb="xs">Viewer Controls</Text>
+    <div className="glass-card p-4 space-y-3 animate-scale-in">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500/10 to-transparent border border-cyan-500/20 flex items-center justify-center">
+          <SquaresFour size={16} weight="duotone" className="text-cyan-400" />
+        </div>
+        <p className="text-sm font-semibold">Viewer Controls</p>
+      </div>
       
       {/* View Mode */}
       <ControlPanel 
@@ -801,24 +802,31 @@ interface ControlPanelProps {
 
 function ControlPanel({ title, icon, expanded, onToggle, children }: ControlPanelProps) {
   return (
-    <div className="border border-white/5 rounded-lg overflow-hidden">
+    <div className="border border-white/5 rounded-xl overflow-hidden bg-white/[0.02] transition-all duration-300 hover:border-white/10">
       <button
         onClick={onToggle}
-        className="w-full flex items-center justify-between p-2 hover:bg-white/5 transition-colors"
+        className="w-full flex items-center justify-between p-3 hover:bg-white/[0.03] transition-all duration-300"
       >
-        <Group gap="xs">
+        <div className="flex items-center gap-2">
           <span className="text-cyan-400">{icon}</span>
-          <Text size="xs" fw={500}>{title}</Text>
-        </Group>
-        <ActionIcon size="xs" variant="transparent" className={expanded ? 'rotate-180' : ''}>
-          <Plus size={12} className="transition-transform" />
-        </ActionIcon>
+          <span className="text-xs font-medium text-gray-300">{title}</span>
+        </div>
+        <div className={`w-5 h-5 rounded-md bg-white/[0.03] flex items-center justify-center transition-all duration-300 ${expanded ? 'bg-cyan-500/20' : ''}`}>
+          <svg 
+            size={12} 
+            className={`text-gray-400 transition-transform duration-300 ${expanded ? 'text-cyan-400 rotate-180' : ''}`} 
+            viewBox="0 0 256 256" 
+            fill="currentColor"
+          >
+            <path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z" />
+          </svg>
+        </div>
       </button>
-      <Collapse in={expanded}>
-        <div className="p-2 pt-0">
+      <div className={`overflow-hidden transition-all duration-300 ${expanded ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+        <div className="p-3 pt-0">
           {children}
         </div>
-      </Collapse>
+      </div>
     </div>
   )
 }
