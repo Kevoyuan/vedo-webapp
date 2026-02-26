@@ -148,8 +148,8 @@ function Mesh({ vertices, faces, settings, visible = true, isSelected = false }:
   if (!geometry || !visible) return null
 
   return (
-    <mesh ref <Center>
-     ={meshRef} geometry={geometry}>
+    <Center>
+      <mesh ref={meshRef} geometry={geometry}>
         {getMaterial()}
         {/* Selection outline effect */}
         {isSelected && (
@@ -673,7 +673,14 @@ function SceneContent({
   )
 }
 
-export default function MeshViewer({ meshData, loading, settings, onSettingsChange }: Props) {
+export default function MeshViewer({ 
+  meshData, 
+  loading, 
+  settings, 
+  onSettingsChange,
+  meshes,
+  selectedMeshId 
+}: Props) {
   // Handle add measurement
   const handleAddMeasurement = useCallback((m: Measurement) => {
     onSettingsChange({
@@ -686,6 +693,23 @@ export default function MeshViewer({ meshData, loading, settings, onSettingsChan
     return cameraPresets[settings.cameraPreset] || cameraPresets.free
   }, [settings.cameraPreset])
 
+  // Prepare meshes for rendering
+  const renderMeshes = useMemo(() => {
+    if (meshes && meshes.length > 0) {
+      return meshes
+    }
+    if (meshData?.visualize?.vertices?.length) {
+      return [{
+        id: meshData.id,
+        vertices: meshData.visualize.vertices,
+        faces: meshData.visualize.faces,
+        visible: true,
+        filename: meshData.filename
+      }]
+    }
+    return []
+  }, [meshData, meshes])
+
   // Viewer controls hint keyboard shortcuts
   useKeyboardShortcuts([
     { key: '+', handler: () => {}, description: 'Zoom in' },
@@ -696,7 +720,7 @@ export default function MeshViewer({ meshData, loading, settings, onSettingsChan
     return <LoadingState />
   }
 
-  if (!meshData) {
+  if (!meshData && (!meshes || meshes.length === 0)) {
     return <EmptyState />
   }
 
@@ -707,10 +731,11 @@ export default function MeshViewer({ meshData, loading, settings, onSettingsChan
         gl={{ antialias: true, alpha: true }}
         dpr={[1, 2]}
       >
-        <SceneContent 
-          meshData={meshData} 
+        <MultiMeshScene 
+          meshes={renderMeshes} 
           settings={settings}
           onAddMeasurement={handleAddMeasurement}
+          selectedMeshId={selectedMeshId}
         />
       </Canvas>
       

@@ -25,6 +25,21 @@ export interface MeshData extends MeshAnalyzeResponse {
   visualize?: MeshVisualizeResponse
 }
 
+export interface SceneMesh {
+  id: string
+  filename: string
+  visible: boolean
+  position?: [number, number, number]
+  rotation?: [number, number, number]
+  scale?: [number, number, number]
+}
+
+export interface SceneData {
+  id: string
+  name: string
+  mesh_ids: string[]
+}
+
 export interface TransformParams {
   operation: 'rotate' | 'scale' | 'translate'
   params: RotateParams | ScaleParams | TranslateParams

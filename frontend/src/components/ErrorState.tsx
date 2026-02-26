@@ -1,6 +1,6 @@
 import { Button } from '@mantine/core'
 import { motion } from 'framer-motion'
-import { ArrowsClockwise, WarningCircleSlash, Wifi } from '@phosphor-icons/react'
+import { ArrowsClockwise, WarningCircle, WifiSlash } from '@phosphor-icons/react'
 
 interface ErrorStateProps {
   title?: string

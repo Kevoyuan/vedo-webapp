@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import mesh
+from app.routes import mesh, scene
 
 # Thread pool for running blocking Vedo operations
 # Allows async endpoints to remain responsive
@@ -35,6 +35,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(mesh.router, prefix="/mesh", tags=["mesh"])
+app.include_router(scene.router, prefix="/api", tags=["scene"])
 
 
 @app.get("/")

@@ -442,49 +442,136 @@ function ToolbarComponent({
   // Curvature analysis
   const handleCurvature = useCallback(async (method: string) => {
     setLoading(true)
+    
+    // Start operation tracking
+    let operationId: string | null = null
+    if (startOperation) {
+      operationId = startOperation('curvature', 'Computing curvature...')
+    }
+    
     try {
+      if (onProgress && operationId) {
+        onProgress(operationId, 30, 'Computing curvature...')
+      }
+      
       const { data } = await axios.post(`${API_BASE_URL}/mesh/${meshId}/curvature`, {
         method
       })
       
+      if (onProgress && operationId) {
+        onProgress(operationId, 80, 'Finalizing...')
+      }
+      
       if (onAnalysisResult) {
         onAnalysisResult(data)
       }
+      
+      if (onOperationComplete && operationId) {
+        onOperationComplete(operationId, 'Curvature analysis complete')
+      }
     } catch (err) {
       console.error('Curvature error:', err)
+      
+      let errorMessage = 'Failed to compute curvature'
+      if (err instanceof AxiosError) {
+        if (!err.response) {
+          errorMessage = 'Unable to connect to server'
+        } else {
+          errorMessage = err.response.data?.detail || 'Failed to compute curvature'
+        }
+      }
+      
+      if (onOperationFail && operationId) {
+        onOperationFail(operationId, errorMessage)
+      }
+      
+      if (onError) {
+        onError(errorMessage)
+      }
     } finally {
       setLoading(false)
     }
-  }, [meshId, onAnalysisResult])
+  }, [meshId, onAnalysisResult, onError, onProgress, onOperationComplete, onOperationFail, startOperation])
 
   // Quality analysis
   const handleQuality = useCallback(async () => {
     setLoading(true)
+    
+    // Start operation tracking
+    let operationId: string | null = null
+    if (startOperation) {
+      operationId = startOperation('quality', 'Computing quality metrics...')
+    }
+    
     try {
+      if (onProgress && operationId) {
+        onProgress(operationId, 30, 'Computing quality metrics...')
+      }
+      
       const { data } = await axios.post(`${API_BASE_URL}/mesh/${meshId}/quality`, {
         compute_aspect_ratio: true,
         compute_skewness: true,
         compute_orthogonality: true
       })
       
+      if (onProgress && operationId) {
+        onProgress(operationId, 80, 'Finalizing...')
+      }
+      
       if (onAnalysisResult) {
         onAnalysisResult(data)
       }
+      
+      if (onOperationComplete && operationId) {
+        onOperationComplete(operationId, 'Quality analysis complete')
+      }
     } catch (err) {
       console.error('Quality error:', err)
+      
+      let errorMessage = 'Failed to compute quality metrics'
+      if (err instanceof AxiosError) {
+        if (!err.response) {
+          errorMessage = 'Unable to connect to server'
+        } else {
+          errorMessage = err.response.data?.detail || 'Failed to compute quality metrics'
+        }
+      }
+      
+      if (onOperationFail && operationId) {
+        onOperationFail(operationId, errorMessage)
+      }
+      
+      if (onError) {
+        onError(errorMessage)
+      }
     } finally {
       setLoading(false)
     }
-  }, [meshId, onAnalysisResult])
+  }, [meshId, onAnalysisResult, onError, onProgress, onOperationComplete, onOperationFail, startOperation])
 
   // Split mesh
   const handleSplit = useCallback(async () => {
     setLoading(true)
+    
+    // Start operation tracking
+    let operationId: string | null = null
+    if (startOperation) {
+      operationId = startOperation('split', 'Splitting mesh...')
+    }
+    
     try {
+      if (onProgress && operationId) {
+        onProgress(operationId, 30, 'Splitting mesh...')
+      }
+      
       const { data } = await axios.post(`${API_BASE_URL}/mesh/${meshId}/split-merge`, {
         operation: 'split',
         params: {}
       })
+      
+      if (onProgress && operationId) {
+        onProgress(operationId, 70, 'Processing results...')
+      }
       
       if (data.mesh_ids && data.mesh_ids.length > 0) {
         // Load first component
@@ -492,28 +579,87 @@ function ToolbarComponent({
         const { data: newData } = await axios.get(`${API_BASE_URL}/mesh/${firstComp.id}/analyze`)
         onUpdate(newData)
       }
+      
+      if (onOperationComplete && operationId) {
+        onOperationComplete(operationId, 'Mesh split complete')
+      }
     } catch (err) {
       console.error('Split error:', err)
+      
+      let errorMessage = 'Failed to split mesh'
+      if (err instanceof AxiosError) {
+        if (!err.response) {
+          errorMessage = 'Unable to connect to server'
+        } else {
+          errorMessage = err.response.data?.detail || 'Failed to split mesh'
+        }
+      }
+      
+      if (onOperationFail && operationId) {
+        onOperationFail(operationId, errorMessage)
+      }
+      
+      if (onError) {
+        onError(errorMessage)
+      }
     } finally {
       setLoading(false)
     }
-  }, [meshId, onUpdate])
+  }, [meshId, onUpdate, onError, onProgress, onOperationComplete, onOperationFail, startOperation])
 
   // Extract largest component
   const handleExtractLargest = useCallback(async () => {
     setLoading(true)
+    
+    // Start operation tracking
+    let operationId: string | null = null
+    if (startOperation) {
+      operationId = startOperation('merge', 'Extracting largest component...')
+    }
+    
     try {
+      if (onProgress && operationId) {
+        onProgress(operationId, 30, 'Extracting largest component...')
+      }
+      
       const { data } = await axios.post(`${API_BASE_URL}/mesh/${meshId}/split-merge`, {
         operation: 'extract_largest',
         params: {}
       })
       
+      if (onProgress && operationId) {
+        onProgress(operationId, 70, 'Processing results...')
+      }
+      
       const { data: newData } = await axios.get(`${API_BASE_URL}/mesh/${meshId}/analyze`)
       onUpdate(newData)
+      
+      if (onOperationComplete && operationId) {
+        onOperationComplete(operationId, 'Largest component extracted')
+      }
     } catch (err) {
       console.error('Extract largest error:', err)
+      
+      let errorMessage = 'Failed to extract largest component'
+      if (err instanceof AxiosError) {
+        if (!err.response) {
+          errorMessage = 'Unable to connect to server'
+        } else {
+          errorMessage = err.response.data?.detail || 'Failed to extract largest component'
+        }
+      }
+      
+      if (onOperationFail && operationId) {
+        onOperationFail(operationId, errorMessage)
+      }
+      
+      if (onError) {
+        onError(errorMessage)
+      }
     } finally {
       setLoading(false)
+    }
+  }, [meshId, onUpdate, onError, onProgress, onOperationComplete, onOperationFail, startOperation])
     }
   }, [meshId, onUpdate])
 

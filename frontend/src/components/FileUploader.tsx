@@ -1,7 +1,7 @@
 import { useCallback, useState, memo, useRef, useEffect } from 'react'
 import { Button } from '@mantine/core'
 import { Upload } from '@phosphor-icons/react'
-import axios from 'axios'
+import axios, { AxiosError } from 'axios'
 
 // API base URL - could be moved to environment config
 const API_BASE_URL = 'http://localhost:8000'
@@ -14,6 +14,11 @@ interface Props {
   onUpload: (data: unknown) => void
   loading: boolean
   setLoading: (value: boolean | ((prev: boolean) => boolean)) => void
+  onError?: (message: string) => void
+  onProgress?: (id: string, progress: number, message?: string) => void
+  onOperationComplete?: (id: string, message?: string) => void
+  onOperationFail?: (id: string, error: string) => void
+  startOperation?: (type: 'upload' | 'transform' | 'analysis' | 'quality' | 'curvature' | 'slice' | 'boolean' | 'split' | 'merge', message?: string) => string
 }
 
 /**
@@ -21,13 +26,23 @@ interface Props {
  * Handles drag-and-drop and click-to-upload functionality
  * Optimized with memoization
  */
-function FileUploaderComponent({ onUpload, loading, setLoading }: Props) {
+function FileUploaderComponent({ 
+  onUpload, 
+  loading, 
+  setLoading,
+  onError,
+  onProgress,
+  onOperationComplete,
+  onOperationFail,
+  startOperation
+}: Props) {
   const [dragActive, setDragActive] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   
   // Refs for cleanup
   const abortControllerRef = useRef<AbortController | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const operationIdRef = useRef<string | null>(null)
 
   // Cleanup on unmount
   useEffect(() => {
@@ -52,6 +67,11 @@ function FileUploaderComponent({ onUpload, loading, setLoading }: Props) {
     setLoading(true)
     setUploadProgress(0)
     
+    // Start operation tracking
+    if (startOperation) {
+      operationIdRef.current = startOperation('upload', `Uploading ${file.name}...`)
+    }
+    
     try {
       const formData = new FormData()
       formData.append('file', file)
@@ -64,21 +84,46 @@ function FileUploaderComponent({ onUpload, loading, setLoading }: Props) {
             ? Math.round((progressEvent.loaded * 100) / progressEvent.total)
             : 0
           setUploadProgress(progress)
+          if (onProgress && operationIdRef.current) {
+            onProgress(operationIdRef.current, progress, `Uploading ${file.name}...`)
+          }
         }
       })
+      
+      // Complete the operation
+      if (onOperationComplete && operationIdRef.current) {
+        onOperationComplete(operationIdRef.current, `Uploaded ${file.name}`)
+      }
       
       onUpload(data)
     } catch (err) {
       // Don't show error for aborted requests
       if (!axios.isCancel(err)) {
         console.error('Upload error:', err)
-        alert('Failed to upload mesh')
+        
+        // Get error message
+        let errorMessage = 'Failed to upload mesh'
+        if (err instanceof AxiosError) {
+          if (!err.response) {
+            errorMessage = 'Unable to connect to server. Please check your connection.'
+          } else {
+            errorMessage = err.response.data?.detail || 'Failed to upload mesh'
+          }
+        }
+        
+        if (onOperationFail && operationIdRef.current) {
+          onOperationFail(operationIdRef.current, errorMessage)
+        }
+        
+        if (onError) {
+          onError(errorMessage)
+        }
       }
     } finally {
       setLoading(false)
       setUploadProgress(0)
     }
-  }, [onUpload, setLoading])
+  }, [onUpload, setLoading, onError, onProgress, onOperationComplete, onOperationFail, startOperation])
 
   /**
    * Validate file extension
