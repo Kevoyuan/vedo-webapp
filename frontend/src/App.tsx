@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { MantineProvider, createTheme } from '@mantine/core'
 import '@mantine/core/styles.css'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -10,19 +10,30 @@ import AnalysisPanel from './components/AnalysisPanel'
 import ViewerControls from './components/ViewerControls'
 import HistoryPanel from './components/HistoryPanel'
 import MeshListPanel from './components/MeshListPanel'
+import ProjectManager from './components/ProjectManager'
 import { MeshData } from './types'
 import { ViewerSettings, defaultViewerSettings } from './types/viewer'
 import { ToastProvider, useToast } from './components/Toast'
 import { FileUploaderSkeleton, MeshInfoSkeleton, ToolbarSkeleton, ViewerSkeleton } from './components/Skeleton'
 import ErrorState from './components/ErrorState'
-import KeyboardShortcutsModal from './components/KeyboardShortcutsModal'
-import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import KeyboardShortcutsModal, { useKeyboardShortcuts, CommandPalette } from './hooks/useKeyboardShortcuts'
 import { useHistory, OperationType } from './hooks/useHistory'
 import useOnlineStatus from './hooks/useOnlineStatus'
 import { useOperationProgress, OperationProgress } from './hooks/useOperationProgress'
 import OfflineIndicator from './components/OfflineIndicator'
 import { OperationProgressList } from './components/OperationProgressBar'
 import * as api from './lib/api'
+import * as storage from './lib/storage'
+import StoragePanel from './components/StoragePanel'
+import { 
+  Project, 
+  ProjectCamera, 
+  ProjectSettings, 
+  initDB, 
+  autoSaveToLocalStorage, 
+  loadAutoSave,
+  saveProject as saveProjectToDB 
+} from './lib/projectStorage'
 import './index.css'
 
 // Responsive hook
@@ -145,6 +156,12 @@ const theme = createTheme({
 })
 
 function AppContent() {
+  // Multi-mesh state
+  const [meshes, setMeshes] = useState<MeshData[]>([])
+  const [selectedMeshId, setSelectedMeshId] = useState<string | null>(null)
+  const [meshVisualizations, setMeshVisualizations] = useState<Record<string, { vertices: number[][], faces: number[][] }>>({})
+  
+  // Legacy single mesh state (for backwards compatibility)
   const [meshData, setMeshData] = useState<MeshData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -153,6 +170,141 @@ function AppContent() {
   const [viewerSettings, setViewerSettings] = useState<ViewerSettings>(defaultViewerSettings)
   const [analysisResult, setAnalysisResult] = useState<any>(null)
   const { showToast } = useToast()
+  
+  // Storage/Project state
+  const [storagePanelOpen, setStoragePanelOpen] = useState(false)
+  const [currentProjectName, setCurrentProjectName] = useState<string | null>(null)
+  
+  // Project management state
+  const [currentProject, setCurrentProject] = useState<Project | null>(null)
+  const [projectCamera, setProjectCamera] = useState<ProjectCamera>({
+    position: [4, 4, 4],
+    target: [0, 0, 0]
+  })
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Initialize IndexedDB
+  useEffect(() => {
+    initDB().catch(err => console.error('Failed to init project DB:', err))
+  }, [])
+  
+  // Auto-save to localStorage when state changes (debounced)
+  useEffect(() => {
+    if (!currentProject) return
+    
+    // Debounce auto-save
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+    }
+    
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSaveToLocalStorage({
+        currentProjectId: currentProject.id,
+        meshes,
+        meshVisualizations,
+        viewerSettings: viewerSettings as ProjectSettings,
+        camera: projectCamera
+      })
+    }, 2000) // Auto-save after 2 seconds of inactivity
+    
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current)
+      }
+    }
+  }, [meshes, meshVisualizations, viewerSettings, projectCamera, currentProject])
+  
+  // Load project handler
+  const handleLoadProject = useCallback((project: Project) => {
+    // Load meshes from project
+    const loadedMeshes: MeshData[] = project.meshes.map(m => ({
+      id: m.id,
+      filename: m.filename,
+      n_points: m.n_points,
+      n_cells: m.n_cells,
+      volume: m.volume,
+      area: m.area,
+      bounds: m.bounds
+    }))
+    
+    const loadedVisualizations: Record<string, { vertices: number[][], faces: number[][] }> = {}
+    project.meshes.forEach(m => {
+      loadedVisualizations[m.id] = {
+        vertices: m.vertices,
+        faces: m.faces
+      }
+    })
+    
+    setMeshes(loadedMeshes)
+    setMeshVisualizations(loadedVisualizations)
+    
+    // Set first mesh as selected
+    if (loadedMeshes.length > 0) {
+      setSelectedMeshId(loadedMeshes[0].id)
+      setMeshData(loadedMeshes[0])
+    }
+    
+    // Load camera
+    if (project.camera) {
+      setProjectCamera(project.camera)
+    }
+    
+    // Load settings
+    if (project.settings) {
+      setViewerSettings({
+        ...defaultViewerSettings,
+        ...project.settings
+      })
+    }
+    
+    setCurrentProjectName(project.name)
+  }, [])
+  
+  // Handle project change
+  const handleProjectChange = useCallback((project: Project | null) => {
+    setCurrentProject(project)
+    if (project) {
+      setCurrentProjectName(project.name)
+    } else {
+      setCurrentProjectName(null)
+    }
+  }, [])
+  
+  // Quick save handler (Ctrl+S)
+  const handleQuickSave = useCallback(async () => {
+    if (!currentProject) {
+      showToast('info', 'Create or load a project first')
+      return
+    }
+    
+    try {
+      const projectMeshes = meshes.map(mesh => ({
+        id: mesh.id,
+        filename: mesh.filename || mesh.id,
+        vertices: meshVisualizations[mesh.id]?.vertices || [],
+        faces: meshVisualizations[mesh.id]?.faces || [],
+        n_points: mesh.n_points,
+        n_cells: mesh.n_cells,
+        volume: mesh.volume,
+        area: mesh.area,
+        bounds: mesh.bounds
+      }))
+
+      const updatedProject: Project = {
+        ...currentProject,
+        meshes: projectMeshes,
+        camera: projectCamera,
+        settings: viewerSettings as ProjectSettings,
+        modified: Date.now()
+      }
+
+      await saveProjectToDB(updatedProject)
+      setCurrentProject(updatedProject)
+      showToast('success', 'Project saved')
+    } catch (err) {
+      showToast('error', 'Failed to save project')
+    }
+  }, [currentProject, meshes, meshVisualizations, projectCamera, viewerSettings, showToast])
   
   // Online status tracking
   const { isOnline, wasOffline, checkConnection } = useOnlineStatus()
@@ -221,29 +373,32 @@ function AppContent() {
   }, [canRedo, redo, showToast])
 
   // Keyboard shortcuts
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  
   const shortcuts = [
+    // General
     {
       key: '?',
       handler: () => setShortcutsModalOpen(true),
       description: 'Show shortcuts'
     },
     {
-      key: 'r',
-      handler: () => {
-        if (error) {
-          handleRetry()
-        }
-      },
-      description: 'Retry'
+      key: 'k',
+      handler: () => setCommandPaletteOpen(true),
+      ctrl: true,
+      description: 'Open command palette'
     },
     {
       key: 'Escape',
       handler: () => {
         setShortcutsModalOpen(false)
+        setCommandPaletteOpen(false)
         setError(null)
       },
       description: 'Close modal'
     },
+    
+    // Undo/Redo
     {
       key: 'z',
       handler: () => handleUndo(),
@@ -259,13 +414,186 @@ function AppContent() {
       description: 'Redo'
     },
     {
+      key: 'y',
+      handler: () => handleRedo(),
+      ctrl: true,
+      description: 'Redo'
+    },
+    {
+      key: 's',
+      handler: () => handleQuickSave(),
+      ctrl: true,
+      description: 'Save project'
+    },
+    
+    // View toggles
+    {
       key: 'h',
       handler: () => setHistoryPanelOpen(prev => !prev),
       description: 'Toggle history panel'
     },
+    {
+      key: ' ',
+      handler: () => {
+        if (!isMobile) {
+          setSidebarCollapsed(prev => !prev)
+        }
+      },
+      description: 'Toggle sidebar'
+    },
+    {
+      key: 'g',
+      handler: () => setViewerSettings(prev => ({ ...prev, showGrid: !prev.showGrid })),
+      description: 'Toggle grid'
+    },
+    {
+      key: 'a',
+      handler: () => setViewerSettings(prev => ({ ...prev, showAxes: !prev.showAxes })),
+      description: 'Toggle axes'
+    },
+    
+    // Transform modes
+    {
+      key: '1',
+      handler: () => {}, // Rotate mode - handled by toolbar
+      description: 'Rotate mode'
+    },
+    {
+      key: '2',
+      handler: () => {}, // Scale mode - handled by toolbar
+      description: 'Scale mode'
+    },
+    {
+      key: '3',
+      handler: () => {}, // Translate mode - handled by toolbar
+      description: 'Translate mode'
+    },
+    
+    // Camera presets
+    {
+      key: '5',
+      handler: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'free' })),
+      description: 'Free camera'
+    },
+    {
+      key: '6',
+      handler: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'top' })),
+      description: 'Top view'
+    },
+    {
+      key: '7',
+      handler: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'front' })),
+      description: 'Front view'
+    },
+    {
+      key: '8',
+      handler: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'side' })),
+      description: 'Side view'
+    },
+    {
+      key: '9',
+      handler: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'isometric' })),
+      description: 'Isometric view'
+    },
+    
+    // Display
+    {
+      key: 'w',
+      handler: () => setViewerSettings(prev => ({ 
+        ...prev, 
+        viewMode: prev.viewMode === 'wireframe' ? 'solid' : 'wireframe' 
+      })),
+      description: 'Toggle wireframe'
+    },
+    {
+      key: 'x',
+      handler: () => setViewerSettings(prev => ({ 
+        ...prev, 
+        viewMode: prev.viewMode === 'xray' ? 'solid' : 'xray' 
+      })),
+      description: 'Toggle X-Ray mode'
+    },
+    {
+      key: '+',
+      handler: () => {}, // Zoom in - handled by viewer
+      description: 'Zoom in'
+    },
+    {
+      key: '-',
+      handler: () => {}, // Zoom out - handled by viewer
+      description: 'Zoom out'
+    },
+    {
+      key: '0',
+      handler: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'free' })),
+      description: 'Reset camera'
+    },
+    
+    // Error handling
+    {
+      key: 'r',
+      handler: () => {
+        if (error) {
+          handleRetry()
+        }
+      },
+      description: 'Retry'
+    },
+    
+    // Delete mesh
+    {
+      key: 'Delete',
+      handler: () => {
+        if (selectedMeshId) {
+          handleDeleteMesh(selectedMeshId)
+        }
+      },
+      description: 'Delete selected mesh'
+    },
+    {
+      key: 'Backspace',
+      handler: () => {
+        if (selectedMeshId) {
+          handleDeleteMesh(selectedMeshId)
+        }
+      },
+      description: 'Delete selected mesh'
+    },
   ]
 
   useKeyboardShortcuts(shortcuts)
+
+  // Command palette commands
+  const commands = useMemo(() => [
+    // General
+    { id: 'shortcuts', label: 'Keyboard Shortcuts', description: 'View all shortcuts', shortcut: '?', category: 'General', action: () => setShortcutsModalOpen(true) },
+    { id: 'command-palette', label: 'Command Palette', shortcut: 'Ctrl+K', category: 'General', action: () => setCommandPaletteOpen(true) },
+    
+    // File
+    { id: 'undo', label: 'Undo', shortcut: 'Ctrl+Z', category: 'File', action: handleUndo },
+    { id: 'redo', label: 'Redo', shortcut: 'Ctrl+Shift+Z', category: 'File', action: handleRedo },
+    
+    // View
+    { id: 'toggle-sidebar', label: 'Toggle Sidebar', shortcut: 'Space', category: 'View', action: () => setSidebarCollapsed(prev => !prev) },
+    { id: 'toggle-history', label: 'Toggle History Panel', shortcut: 'H', category: 'View', action: () => setHistoryPanelOpen(prev => !prev) },
+    { id: 'toggle-grid', label: 'Toggle Grid', shortcut: 'G', category: 'View', action: () => setViewerSettings(prev => ({ ...prev, showGrid: !prev.showGrid })) },
+    { id: 'toggle-axes', label: 'Toggle Axes', shortcut: 'A', category: 'View', action: () => setViewerSettings(prev => ({ ...prev, showAxes: !prev.showAxes })) },
+    
+    // Camera
+    { id: 'camera-free', label: 'Camera: Free', shortcut: '5', category: 'Camera', action: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'free' })) },
+    { id: 'camera-top', label: 'Camera: Top', shortcut: '6', category: 'Camera', action: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'top' })) },
+    { id: 'camera-front', label: 'Camera: Front', shortcut: '7', category: 'Camera', action: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'front' })) },
+    { id: 'camera-side', label: 'Camera: Side', shortcut: '8', category: 'Camera', action: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'side' })) },
+    { id: 'camera-iso', label: 'Camera: Isometric', shortcut: '9', category: 'Camera', action: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'isometric' })) },
+    { id: 'camera-reset', label: 'Reset Camera', shortcut: '0', category: 'Camera', action: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'free' })) },
+    
+    // Display
+    { id: 'wireframe', label: 'Toggle Wireframe', shortcut: 'W', category: 'Display', action: () => setViewerSettings(prev => ({ ...prev, viewMode: prev.viewMode === 'wireframe' ? 'solid' : 'wireframe' })) },
+    { id: 'xray', label: 'Toggle X-Ray Mode', shortcut: 'X', category: 'Display', action: () => setViewerSettings(prev => ({ ...prev, viewMode: prev.viewMode === 'xray' ? 'solid' : 'xray' })) },
+    
+    // Mesh
+    ...(selectedMeshId ? [{ id: 'delete-mesh', label: 'Delete Selected Mesh', shortcut: 'Del', category: 'Mesh', action: () => handleDeleteMesh(selectedMeshId) }] : []),
+  ], [handleUndo, handleRedo, selectedMeshId, sidebarCollapsed, viewerSettings])
 
   // Global error handler
   useEffect(() => {
@@ -292,11 +620,29 @@ function AppContent() {
     setError(null)
   }, [])
 
-  const handleUploadSuccess = useCallback((data: MeshData) => {
-    setMeshData(data)
-    setError(null)
-    pushHistory('import', data, `Imported: ${data.id}`)
-    showToast('success', `Mesh "${data.id}" loaded successfully`)
+  // Handle mesh upload success - adds to mesh list
+  const handleUploadSuccess = useCallback(async (data: MeshData) => {
+    try {
+      // Get visualization data
+      const vizData = await api.getMeshVisualize(data.id)
+      
+      // Add to meshes list
+      setMeshes(prev => [...prev, data])
+      setMeshVisualizations(prev => ({
+        ...prev,
+        [data.id]: vizData
+      }))
+      
+      // Also set as current for backwards compatibility
+      setMeshData(data)
+      setSelectedMeshId(data.id)
+      
+      setError(null)
+      pushHistory('import', data, `Imported: ${data.id}`)
+      showToast('success', `Mesh "${data.filename || data.id}" loaded successfully`)
+    } catch (err) {
+      showToast('error', 'Failed to load mesh visualization')
+    }
   }, [showToast, pushHistory])
 
   const handleTransformSuccess = useCallback((data: MeshData, operation?: OperationType, description?: string) => {
@@ -308,6 +654,183 @@ function AppContent() {
   const handleViewerSettingsChange = (newSettings: Partial<ViewerSettings>) => {
     setViewerSettings(prev => ({ ...prev, ...newSettings }))
   }
+
+  // Multi-mesh handlers
+  const handleSelectMesh = useCallback((id: string | null) => {
+    setSelectedMeshId(id)
+    const mesh = meshes.find(m => m.id === id)
+    if (mesh) {
+      setMeshData(mesh)
+    }
+  }, [meshes])
+
+  const handleDeleteMesh = useCallback(async (id: string) => {
+    try {
+      await api.deleteMesh(id)
+      setMeshes(prev => prev.filter(m => m.id !== id))
+      setMeshVisualizations(prev => {
+        const newViz = { ...prev }
+        delete newViz[id]
+        return newViz
+      })
+      
+      if (selectedMeshId === id) {
+        setSelectedMeshId(null)
+        setMeshData(null)
+      }
+      
+      showToast('info', 'Mesh deleted')
+    } catch (err) {
+      showToast('error', 'Failed to delete mesh')
+    }
+  }, [selectedMeshId, showToast])
+
+  const handleToggleVisibility = useCallback((id: string, visible: boolean) => {
+    setMeshVisualizations(prev => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        visible
+      }
+    }))
+  }, [])
+
+  const handleMergeMeshes = useCallback(async (ids: string[]) => {
+    if (ids.length < 2) return
+    
+    try {
+      setLoading(true)
+      const merged = await api.mergeMeshes(ids, 'merge', 'merged_mesh')
+      
+      // Get visualization for merged mesh
+      const vizData = await api.getMeshVisualize(merged.id)
+      
+      setMeshes(prev => [...prev, merged])
+      setMeshVisualizations(prev => ({
+        ...prev,
+        [merged.id]: vizData
+      }))
+      
+      setSelectedMeshId(merged.id)
+      setMeshData(merged)
+      
+      showToast('success', `Merged ${ids.length} meshes`)
+    } catch (err: any) {
+      showToast('error', err.message || 'Failed to merge meshes')
+    } finally {
+      setLoading(false)
+    }
+  }, [showToast])
+
+  const handleVisualizeMesh = useCallback(async (id: string) => {
+    try {
+      const vizData = await api.getMeshVisualize(id)
+      setMeshVisualizations(prev => ({
+        ...prev,
+        [id]: vizData
+      }))
+      return vizData
+    } catch (err) {
+      showToast('error', 'Failed to load mesh')
+      throw err
+    }
+  }, [showToast])
+
+  // Storage handlers
+  const handleSaveProject = useCallback(async (name: string) => {
+    const savedMeshes = meshes.map(mesh => ({
+      id: mesh.id,
+      filename: mesh.filename || mesh.id,
+      analyzeData: mesh,
+      visualizationData: meshVisualizations[mesh.id]
+    }))
+
+    const project = storage.createProjectFromState(
+      name,
+      savedMeshes,
+      viewerSettings,
+      selectedMeshId
+    )
+
+    try {
+      await storage.saveProject(project)
+      setCurrentProjectName(name)
+      showToast('success', `Project "${name}" saved`)
+    } catch (err) {
+      showToast('error', 'Failed to save project')
+    }
+  }, [meshes, meshVisualizations, viewerSettings, selectedMeshId, showToast])
+
+  const handleLoadProject = useCallback(async (project: storage.SavedProject) => {
+    try {
+      // Clear current state
+      setMeshes([])
+      setMeshVisualizations({})
+      setSelectedMeshId(null)
+      setMeshData(null)
+
+      // Load project meshes
+      const loadedMeshes: MeshData[] = []
+      const loadedViz: Record<string, { vertices: number[][], faces: number[][] }> = {}
+
+      for (const savedMesh of project.meshes) {
+        loadedMeshes.push(savedMesh.analyzeData)
+        if (savedMesh.visualizationData) {
+          loadedViz[savedMesh.id] = savedMesh.visualizationData
+          // Also cache to localStorage for quick access
+          storage.saveMeshToLocalStorage(savedMesh.id, savedMesh.visualizationData)
+        }
+      }
+
+      setMeshes(loadedMeshes)
+      setMeshVisualizations(loadedViz)
+
+      // Restore viewer settings
+      if (project.viewerSettings) {
+        setViewerSettings(project.viewerSettings)
+      }
+
+      // Select the project's selected mesh or first mesh
+      if (project.selectedMeshId && loadedMeshes.find(m => m.id === project.selectedMeshId)) {
+        setSelectedMeshId(project.selectedMeshId)
+        setMeshData(loadedMeshes.find(m => m.id === project.selectedMeshId)!)
+      } else if (loadedMeshes.length > 0) {
+        setSelectedMeshId(loadedMeshes[0].id)
+        setMeshData(loadedMeshes[0])
+      }
+
+      setCurrentProjectName(project.name)
+      clearHistory()
+      showToast('success', `Project "${project.name}" loaded`)
+    } catch (err) {
+      showToast('error', 'Failed to load project')
+    }
+  }, [showToast, clearHistory])
+
+  // Auto-save on changes
+  useEffect(() => {
+    if (!currentProjectName || meshes.length === 0) return
+
+    const timer = setTimeout(() => {
+      handleSaveProject(currentProjectName)
+    }, 3000) // Auto-save after 3 seconds of inactivity
+
+    return () => clearTimeout(timer)
+  }, [meshes, meshVisualizations, viewerSettings, selectedMeshId, currentProjectName])
+
+  // Get meshes for viewer
+  const viewerMeshes = useMemo(() => {
+    return meshes.map(mesh => ({
+      id: mesh.id,
+      vertices: meshVisualizations[mesh.id]?.vertices || [],
+      faces: meshVisualizations[mesh.id]?.faces || [],
+      visible: meshVisualizations[mesh.id] !== undefined,
+      filename: mesh.filename
+    }))
+  }, [meshes, meshVisualizations])
+
+  // Get current selected mesh data
+  const currentMesh = selectedMeshId ? meshes.find(m => m.id === selectedMeshId) : null
 
   return (
     <MantineProvider theme={theme} defaultColorScheme="dark">
@@ -379,6 +902,19 @@ function AppContent() {
             >
               <kbd className="px-1.5 py-0.5 bg-white/5 rounded text-gray-500 text-[10px]">?</kbd>
             </button>
+            {/* Storage/Projects button */}
+            <button
+              onClick={() => setStoragePanelOpen(true)}
+              className="text-xs text-gray-500 hover:text-gray-400 transition-colors px-2 py-1 rounded hover:bg-white/5"
+              title="Storage & Projects"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+              </svg>
+            </button>
+            {currentProjectName && (
+              <span className="text-xs text-cyan-400/70">{currentProjectName}</span>
+            )}
             <div className={`w-2 h-2 rounded-full ${loading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
             <span className="text-xs text-gray-500">{loading ? 'Processing...' : 'Ready'}</span>
           </motion.div>
@@ -425,6 +961,45 @@ function AppContent() {
                 />
               )}
             </motion.div>
+
+            {/* Project Manager */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.06 }}
+            >
+              <ProjectManager 
+                currentProject={currentProject}
+                onProjectChange={handleProjectChange}
+                onLoadProject={handleLoadProject}
+                meshes={meshes}
+                meshVisualizations={meshVisualizations}
+                viewerSettings={viewerSettings}
+                camera={projectCamera}
+                showToast={showToast}
+              />
+            </motion.div>
+
+            {/* Mesh List Panel - Multi-mesh support */}
+            <AnimatePresence mode="wait">
+              {meshes.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.08 }}
+                >
+                  <MeshListPanel 
+                    meshes={meshes}
+                    selectedMeshId={selectedMeshId}
+                    onSelectMesh={handleSelectMesh}
+                    onDeleteMesh={handleDeleteMesh}
+                    onToggleVisibility={handleToggleVisibility}
+                    onMergeMeshes={handleMergeMeshes}
+                    onVisualizeMesh={handleVisualizeMesh}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Mesh info with elegant card */}
             <AnimatePresence mode="wait">
@@ -568,7 +1143,7 @@ function AppContent() {
                   message={error}
                   onRetry={handleRetry}
                 />
-              ) : meshData ? (
+              ) : meshData || meshes.length > 0 ? (
                 <motion.div
                   key="mesh-viewer"
                   initial={{ opacity: 0 }}
@@ -580,6 +1155,8 @@ function AppContent() {
                     loading={loading}
                     settings={viewerSettings}
                     onSettingsChange={handleViewerSettingsChange}
+                    meshes={viewerMeshes}
+                    selectedMeshId={selectedMeshId}
                   />
                 </motion.div>
               ) : (
@@ -655,6 +1232,29 @@ function AppContent() {
         <KeyboardShortcutsModal 
           opened={shortcutsModalOpen} 
           onClose={() => setShortcutsModalOpen(false)} 
+        />
+
+        <CommandPalette 
+          opened={commandPaletteOpen}
+          onClose={() => setCommandPaletteOpen(false)}
+          commands={commands}
+        />
+
+        {/* Storage Panel */}
+        <StoragePanel
+          opened={storagePanelOpen}
+          onClose={() => setStoragePanelOpen(false)}
+          onLoadProject={handleLoadProject}
+          onSaveProject={handleSaveProject}
+          meshes={meshes.map(mesh => ({
+            id: mesh.id,
+            filename: mesh.filename || mesh.id,
+            analyzeData: mesh,
+            visualizationData: meshVisualizations[mesh.id]
+          }))}
+          viewerSettings={viewerSettings}
+          selectedMeshId={selectedMeshId}
+          currentProjectName={currentProjectName}
         />
       </div>
     </MantineProvider>
