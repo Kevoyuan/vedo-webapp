@@ -3,16 +3,16 @@ import { Button, Group, ActionIcon, Tooltip, Text, SegmentedControl, Divider, Se
 import { 
   ArrowClockwise, 
   ArrowCounterClockwise, 
-  MagnifyingPlus, 
-  MagnifyingMinus,
+  MagnifyingGlassPlus, 
+  MagnifyingGlassMinus,
   ArrowsOut,
-  Rotate,
+  ArrowClockwise as Rotate,
   Scissors,
   Cubes,
   ArrowsIn,
   Waveform,
   ChartLine,
-  CircleDashed,
+  Circle as CircleDashed,
   Split,
   Merge,
   ChartPie,
@@ -660,8 +660,6 @@ function ToolbarComponent({
       setLoading(false)
     }
   }, [meshId, onUpdate, onError, onProgress, onOperationComplete, onOperationFail, startOperation])
-    }
-  }, [meshId, onUpdate])
 
   // Open boolean modal
   const openBooleanModal = useCallback(() => {
@@ -788,14 +786,14 @@ function ToolbarComponent({
           loading={loading}
         />
         <ToolButton 
-          icon={<MagnifyingMinus size={18} />}
+          icon={<MagnifyingGlassMinus size={18} />}
           label="Scale Down"
           onClick={handleScaleDown}
           loading={loading}
           accent
         />
         <ToolButton 
-          icon={<MagnifyingPlus size={18} />}
+          icon={<MagnifyingGlassPlus size={18} />}
           label="Scale Up"
           onClick={handleScaleUp}
           loading={loading}

@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion'
 
 interface SkeletonProps {
   className?: string
@@ -89,7 +88,7 @@ export function ViewerSkeleton() {
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-[#0a0a0b]">
       <div className="text-center">
-        <motion.div
+        <div
           animate={{ rotate: 360 }}
           transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
           className="relative w-20 h-20 mx-auto mb-5"
@@ -97,7 +96,7 @@ export function ViewerSkeleton() {
           <div className="absolute inset-0 border-2 border-cyan-500/10 rounded-2xl" />
           <div className="absolute inset-0 border-2 border-transparent border-t-cyan-400 rounded-2xl" />
           <div className="absolute inset-2 border border-cyan-500/20 rounded-xl" />
-        </motion.div>
+        </div>
         <Skeleton className="w-40 h-5 mx-auto mb-2" />
         <Skeleton className="w-32 h-4 mx-auto" />
       </div>

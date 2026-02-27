@@ -217,28 +217,6 @@ export default function StoragePanel({
             Import
           </button>
         </div>
-            onClick={() => setActiveTab('recent')}
-            color={activeTab === 'recent' ? 'cyan' : 'gray'}
-          >
-            Recent
-          </Button>
-          <Button
-            variant={activeTab === 'projects' ? 'filled' : 'subtle'}
-            size="xs"
-            onClick={() => setActiveTab('projects')}
-            color={activeTab === 'projects' ? 'cyan' : 'gray'}
-          >
-            Saved Projects
-          </Button>
-          <Button
-            variant={activeTab === 'import' ? 'filled' : 'subtle'}
-            size="xs"
-            onClick={() => setActiveTab('import')}
-            color={activeTab === 'import' ? 'cyan' : 'gray'}
-          >
-            Import/Export
-          </Button>
-        </Group>
 
         {/* Recent Files Tab */}
         {activeTab === 'recent' && (

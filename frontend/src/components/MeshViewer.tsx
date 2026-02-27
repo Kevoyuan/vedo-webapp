@@ -1,18 +1,17 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
-import { 
-  OrbitControls, 
-  Grid, 
-  Environment, 
+import {
+  OrbitControls,
+  Grid,
+  Environment,
   Center,
   AxesHelper,
   Html,
   Line,
   Text
 } from '@react-three/drei'
-import { useMemo } from 'react'
-import * as THREE from 'three'
 import { motion } from 'framer-motion'
+import * as THREE from 'three'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { ViewerSettings, cameraPresets, Measurement, Annotation } from '../types/viewer'
 import { MeshData } from '../types'
@@ -29,7 +28,7 @@ interface MeshItem {
 interface Props {
   meshData: MeshData | null
   loading?: boolean
-  settings: ViewerSettings
+  settings: ViewerSettings,
   onSettingsChange: (settings: Partial<ViewerSettings>) => void
   // Multi-mesh support
   meshes?: MeshItem[]
@@ -77,7 +76,7 @@ function getColorFromMap(value: number, mapType: string, min: number, max: numbe
 function Mesh({ vertices, faces, settings, visible = true, isSelected = false }: { 
   vertices: number[][]; 
   faces: number[][]; 
-  settings: ViewerSettings
+  settings: ViewerSettings,
   visible?: boolean
   isSelected?: boolean
 }) {
@@ -265,7 +264,7 @@ function MultiMeshScene({
   selectedMeshId 
 }: { 
   meshes: MeshItem[]
-  settings: ViewerSettings
+  settings: ViewerSettings,
   onAddMeasurement: (m: Measurement) => void
   selectedMeshId?: string | null
 }) {
@@ -357,17 +356,17 @@ function MultiMeshScene({
           ONE: THREE.TOUCH.ROTATE,
           TWO: THREE.TOUCH.DOLLY_PAN
         }}
-      </>
+      />
+    </>
     )
   }
-}
 
 // Measurement Points Component
 function MeasurementPoints({ 
   settings, 
   onAddMeasurement 
 }: { 
-  settings: ViewerSettings
+  settings: ViewerSettings,
   onAddMeasurement: (m: Measurement) => void
 }) {
   const { camera } = useThree()
@@ -625,14 +624,14 @@ function Annotations({ annotations }: { annotations: Annotation[] }) {
 
 function EmptyState() {
   return (
-    <motion.div 
+    <div 
       className="absolute inset-0 flex items-center justify-center bg-[#0a0a0b]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <motion.div 
+      <div 
         className="text-center"
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -640,7 +639,7 @@ function EmptyState() {
       >
         {/* 3D placeholder icon */}
         <div className="relative w-32 h-32 mx-auto mb-6">
-          <motion.div 
+          <div 
             className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent rounded-2xl rotate-45"
             animate={{ rotate: [45, 50, 45] }}
             transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
@@ -653,12 +652,12 @@ function EmptyState() {
             </svg>
           </div>
           {/* Floating particles effect */}
-          <motion.div 
+          <div 
             className="absolute -top-2 -right-2 w-3 h-3 bg-cyan-500/30 rounded-full" 
             animate={{ y: [0, -5, 0], opacity: [0.3, 0.6, 0.3] }}
             transition={{ duration: 2, repeat: Infinity }}
           />
-          <motion.div 
+          <div 
             className="absolute -bottom-1 -left-1 w-2 h-2 bg-cyan-400/20 rounded-full" 
             animate={{ y: [0, 3, 0], opacity: [0.2, 0.5, 0.2] }}
             transition={{ duration: 2.5, repeat: Infinity, delay: 0.5 }}
@@ -683,14 +682,14 @@ function EmptyState() {
         </motion.p>
         
         {/* Supported formats */}
-        <motion.div 
+        <div 
           className="mt-6 flex flex-wrap justify-center gap-2"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.4 }}
         >
           {['.STL', '.OBJ', '.VTK', '.PLY'].map((ext, i) => (
-            <motion.span 
+            <span 
               key={ext} 
               className="px-2.5 py-1 text-xs bg-white/5 border border-white/5 rounded-md text-gray-500"
               initial={{ opacity: 0, scale: 0.8 }}
@@ -698,9 +697,9 @@ function EmptyState() {
               transition={{ delay: 0.4 + i * 0.1 }}
             >
               {ext}
-            </motion.span>
+            </span>
           ))}
-        </motion.div>
+        </div>
 
         {/* Keyboard hint */}
         <motion.p 
@@ -711,32 +710,32 @@ function EmptyState() {
         >
           Press <kbd className="px-1.5 py-0.5 bg-white/5 rounded text-gray-500">O</kbd> to open file browser
         </motion.p>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   )
 }
 
 function LoadingState() {
   return (
-    <motion.div 
+    <div 
       className="absolute inset-0 flex items-center justify-center bg-[#0a0a0b] z-10"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
-      <motion.div 
+      <div 
         className="text-center"
         initial={{ scale: 0.9 }}
         animate={{ scale: 1 }}
       >
-        <motion.div 
+        <div 
           className="w-16 h-16 mx-auto mb-4 relative"
           animate={{ rotate: 360 }}
           transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
         >
           <div className="absolute inset-0 border-2 border-cyan-500/20 rounded-xl" />
           <div className="absolute inset-0 border-2 border-transparent border-t-cyan-400 rounded-xl" />
-        </motion.div>
+        </div>
         <motion.p 
           className="text-sm text-gray-400"
           animate={{ opacity: [0.5, 1, 0.5] }}
@@ -744,8 +743,8 @@ function LoadingState() {
         >
           Loading mesh...
         </motion.p>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   )
 }
 
@@ -774,7 +773,7 @@ function SceneContent({
   onAddMeasurement 
 }: { 
   meshData: any
-  settings: ViewerSettings
+  settings: ViewerSettings,
   onAddMeasurement: (m: Measurement) => void
 }) {
   const takeScreenshot = useScreenshot()
@@ -935,7 +934,7 @@ export default function MeshViewer({
       </Canvas>
       
       {/* Viewer controls hint - desktop only */}
-      <motion.div 
+      <div 
         className="absolute bottom-4 left-4 glass-light rounded-lg px-3 py-2 hide-mobile"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -944,17 +943,17 @@ export default function MeshViewer({
         <p className="text-xs text-gray-500">
           <span className="text-gray-400">Drag</span> to rotate • <span className="text-gray-400">Scroll</span> to zoom • <span className="text-gray-400">Right-click</span> to pan
         </p>
-      </motion.div>
+      </div>
       
       {/* Touch hints - mobile only */}
-      <motion.div 
+      <div 
         className="touch-hint visible md:hidden"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1 }}
       >
         <span>1 finger: rotate</span> • <span>2 fingers: zoom/pan</span>
-      </motion.div>
+      </div>
     </>
   )
 }

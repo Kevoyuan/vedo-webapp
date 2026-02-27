@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { MeshData, SceneMesh } from '../types'
 
 interface Props {
@@ -78,7 +78,7 @@ export default function MeshListPanel({
   }
 
   return (
-    <motion.div
+    <div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="bg-[#111113] rounded-xl border border-white/5 overflow-hidden"
@@ -96,14 +96,14 @@ export default function MeshListPanel({
         </div>
         
         {selectedForMerge.size >= 2 && (
-          <motion.button
+          <button
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             onClick={handleMerge}
             className="text-xs bg-cyan-500/20 text-cyan-400 px-2 py-1 rounded hover:bg-cyan-500/30 transition-colors"
           >
             Merge ({selectedForMerge.size})
-          </motion.button>
+          </button>
         )}
       </div>
 
@@ -117,7 +117,7 @@ export default function MeshListPanel({
           <div className="divide-y divide-white/5">
             <AnimatePresence>
               {meshes.map((mesh) => (
-                <motion.div
+                <div
                   key={mesh.id}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -201,7 +201,7 @@ export default function MeshListPanel({
                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                     </svg>
                   </button>
-                </motion.div>
+                </div>
               ))}
             </AnimatePresence>
           </div>
@@ -219,6 +219,6 @@ export default function MeshListPanel({
           </span>
         </div>
       )}
-    </motion.div>
+    </div>
   )
 }

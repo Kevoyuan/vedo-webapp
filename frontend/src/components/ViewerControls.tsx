@@ -20,9 +20,9 @@ import {
   Sun, 
   Palette, 
   Ruler, 
-  Camera, 
-  CameraFill,
-  Videocamera,
+  Camera,
+  Camera as CameraFill,
+  VideoCamera as Videocamera,
   DownloadSimple,
   Funnel,
   X,
@@ -35,7 +35,7 @@ import {
   Sparkle,
   FilePdf,
   FileCsv,
-  FileJson,
+  FileCode as FileJson,
   TrashSimple
 } from '@phosphor-icons/react'
 import { ViewerSettings, materialPresets, cameraPresets } from '../types/viewer'

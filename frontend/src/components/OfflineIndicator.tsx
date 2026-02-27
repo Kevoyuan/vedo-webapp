@@ -1,6 +1,6 @@
-import { motion, AnimatePresence } from 'framer-motion'
 import { WifiSlash, ArrowsClockwise } from '@phosphor-icons/react'
 import { Button } from '@mantine/core'
+import { AnimatePresence, motion } from 'framer-motion'
 
 interface OfflineIndicatorProps {
   isOnline: boolean
@@ -15,7 +15,7 @@ export default function OfflineIndicator({ isOnline, wasOffline, onRetry }: Offl
   return (
     <AnimatePresence>
       {!isOnline && (
-        <motion.div
+        <div
           initial={{ opacity: 0, y: -50, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -50, scale: 0.95 }}
@@ -25,7 +25,7 @@ export default function OfflineIndicator({ isOnline, wasOffline, onRetry }: Offl
           <div className="glass border border-amber-500/30 bg-amber-500/10 backdrop-blur-xl rounded-xl px-4 py-3 flex items-center gap-3 shadow-2xl">
             <div className="relative">
               <WifiSlash size={20} className="text-amber-400" />
-              <motion.div
+              <div
                 animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
                 transition={{ duration: 2, repeat: Infinity }}
                 className="absolute inset-0 bg-amber-400/30 rounded-full"
@@ -48,12 +48,12 @@ export default function OfflineIndicator({ isOnline, wasOffline, onRetry }: Offl
               </Button>
             )}
           </div>
-        </motion.div>
+        </div>
       )}
       
       {/* Show "Back online" notification briefly when connection is restored */}
       {isOnline && wasOffline && (
-        <motion.div
+        <div
           initial={{ opacity: 0, y: -50 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -50 }}
@@ -63,7 +63,7 @@ export default function OfflineIndicator({ isOnline, wasOffline, onRetry }: Offl
             <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <p className="text-sm text-emerald-200">Back online</p>
           </div>
-        </motion.div>
+        </div>
       )}
     </AnimatePresence>
   )

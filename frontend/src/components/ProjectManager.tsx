@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  createProject, 
-  getAllProjects, 
-  deleteProject, 
-  saveProject, 
+import { AnimatePresence, motion } from 'framer-motion'
+import {
+  createProject,
+  getAllProjects,
+  deleteProject,
+  saveProject,
   getProject,
   Project,
   ProjectCamera,
@@ -193,7 +193,7 @@ export default function ProjectManager({
       {/* New Project Input */}
       <AnimatePresence>
         {showNewProjectInput && (
-          <motion.div
+          <div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
@@ -230,7 +230,7 @@ export default function ProjectManager({
                 </svg>
               </button>
             </div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
@@ -282,7 +282,7 @@ export default function ProjectManager({
       ) : (
         <div className="space-y-2 max-h-[300px] overflow-y-auto">
           {projects.map((project) => (
-            <motion.div
+            <div
               key={project.id}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
@@ -317,7 +317,7 @@ export default function ProjectManager({
                   </svg>
                 </button>
               </div>
-            </motion.div>
+            </div>
           ))}
         </div>
       )}

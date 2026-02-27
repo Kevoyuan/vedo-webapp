@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { MantineProvider, createTheme } from '@mantine/core'
+import { AnimatePresence } from 'framer-motion'
 import '@mantine/core/styles.css'
-import { AnimatePresence, motion } from 'framer-motion'
+// @ts-ignore
 import MeshViewer from './components/MeshViewer'
 import FileUploader from './components/FileUploader'
 import MeshInfo from './components/MeshInfo'
@@ -83,7 +84,7 @@ function BottomSheet({
         className={`bottom-sheet-overlay ${open ? 'open' : ''}`}
         onClick={onToggle}
       />
-      <motion.div 
+      <div 
         className={`bottom-sheet ${open ? 'open' : ''}`}
         onTouchMove={handleTouchMove}
         initial={{ y: '100%' }}
@@ -94,7 +95,7 @@ function BottomSheet({
         <div className="pb-safe">
           {children}
         </div>
-      </motion.div>
+      </div>
     </>
   )
 }
@@ -213,52 +214,6 @@ function AppContent() {
       }
     }
   }, [meshes, meshVisualizations, viewerSettings, projectCamera, currentProject])
-  
-  // Load project handler
-  const handleLoadProject = useCallback((project: Project) => {
-    // Load meshes from project
-    const loadedMeshes: MeshData[] = project.meshes.map(m => ({
-      id: m.id,
-      filename: m.filename,
-      n_points: m.n_points,
-      n_cells: m.n_cells,
-      volume: m.volume,
-      area: m.area,
-      bounds: m.bounds
-    }))
-    
-    const loadedVisualizations: Record<string, { vertices: number[][], faces: number[][] }> = {}
-    project.meshes.forEach(m => {
-      loadedVisualizations[m.id] = {
-        vertices: m.vertices,
-        faces: m.faces
-      }
-    })
-    
-    setMeshes(loadedMeshes)
-    setMeshVisualizations(loadedVisualizations)
-    
-    // Set first mesh as selected
-    if (loadedMeshes.length > 0) {
-      setSelectedMeshId(loadedMeshes[0].id)
-      setMeshData(loadedMeshes[0])
-    }
-    
-    // Load camera
-    if (project.camera) {
-      setProjectCamera(project.camera)
-    }
-    
-    // Load settings
-    if (project.settings) {
-      setViewerSettings({
-        ...defaultViewerSettings,
-        ...project.settings
-      })
-    }
-    
-    setCurrentProjectName(project.name)
-  }, [])
   
   // Handle project change
   const handleProjectChange = useCallback((project: Project | null) => {
@@ -858,7 +813,7 @@ function AppContent() {
           <div className="absolute top-0 right-32 w-40 h-40 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute bottom-0 left-1/4 w-24 h-24 bg-purple-500/3 rounded-full blur-2xl pointer-events-none" />
           
-          <motion.div 
+          <div 
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             className="flex items-center gap-4 relative z-10"
@@ -872,10 +827,10 @@ function AppContent() {
               <h1 className="text-base font-semibold tracking-tight text-gray-100">Vedo WebApp</h1>
               <p className="text-xs text-gray-500 -mt-0.5">3D Mesh Viewer</p>
             </div>
-          </motion.div>
+          </div>
 
           {/* Status indicator & shortcuts button */}
-          <motion.div 
+          <div 
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             className="flex items-center gap-4 relative z-10"
@@ -918,7 +873,7 @@ function AppContent() {
             )}
             <div className={`w-2 h-2 rounded-full ${loading ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]'}`} />
             <span className="text-xs text-gray-500">{loading ? 'Processing...' : 'Ready'}</span>
-          </motion.div>
+          </div>
         </header>
 
         <main className="flex h-[calc(100vh-4rem)]">
@@ -939,7 +894,7 @@ function AppContent() {
             ${isTablet ? (sidebarCollapsed ? 'w-0 p-0 overflow-hidden' : 'w-80') : 'w-80'}
           `}>
             {/* File uploader section */}
-            <motion.div
+            <div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.05 }}
@@ -961,10 +916,10 @@ function AppContent() {
                   startOperation={startOperation}
                 />
               )}
-            </motion.div>
+            </div>
 
             {/* Project Manager */}
-            <motion.div
+            <div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.06 }}
@@ -979,12 +934,12 @@ function AppContent() {
                 camera={projectCamera}
                 showToast={showToast}
               />
-            </motion.div>
+            </div>
 
             {/* Mesh List Panel - Multi-mesh support */}
             <AnimatePresence mode="wait">
               {meshes.length > 0 && (
-                <motion.div
+                <div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.08 }}
@@ -998,46 +953,46 @@ function AppContent() {
                     onMergeMeshes={handleMergeMeshes}
                     onVisualizeMesh={handleVisualizeMesh}
                   />
-                </motion.div>
+                </div>
               )}
             </AnimatePresence>
 
             {/* Mesh info with elegant card */}
             <AnimatePresence mode="wait">
               {loading ? (
-                <motion.div
+                <div
                   key="skeleton-info"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                 >
                   <MeshInfoSkeleton />
-                </motion.div>
+                </div>
               ) : meshData ? (
-                <motion.div
+                <div
                   key="mesh-info"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 }}
                 >
                   <MeshInfo data={meshData} />
-                </motion.div>
+                </div>
               ) : null}
             </AnimatePresence>
 
             {/* Toolbar with transform controls */}
             <AnimatePresence mode="wait">
               {loading ? (
-                <motion.div
+                <div
                   key="skeleton-toolbar"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                 >
                   <ToolbarSkeleton />
-                </motion.div>
+                </div>
               ) : meshData ? (
-                <motion.div
+                <div
                   key="toolbar"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1060,14 +1015,14 @@ function AppContent() {
                     onOperationFail={failOperation}
                     startOperation={startOperation}
                   />
-                </motion.div>
+                </div>
               ) : null}
             </AnimatePresence>
 
             {/* Analysis Panel - Shows results from quality/curvature analysis */}
             <AnimatePresence mode="wait">
               {analysisResult && (
-                <motion.div
+                <div
                   key="analysis-panel"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1078,13 +1033,13 @@ function AppContent() {
                     curvatureData={analysisResult.curvature || analysisResult.method ? analysisResult : null}
                     onClear={() => setAnalysisResult(null)}
                   />
-                </motion.div>
+                </div>
               )}
             </AnimatePresence>
 
             {/* Viewer Controls Panel - Always visible when mesh loaded */}
             {meshData && (
-              <motion.div
+              <div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
@@ -1108,12 +1063,12 @@ function AppContent() {
                   }}
                   isRecording={(window as any).vedoIsRecording || false}
                 />
-              </motion.div>
+              </div>
             )}
 
             {/* History Panel */}
             {meshData && (
-              <motion.div
+              <div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.25 }}
@@ -1129,7 +1084,7 @@ function AppContent() {
                   isOpen={historyPanelOpen}
                   onToggle={() => setHistoryPanelOpen(prev => !prev)}
                 />
-              </motion.div>
+              </div>
             )}
           </aside>
 
@@ -1145,7 +1100,7 @@ function AppContent() {
                   onRetry={handleRetry}
                 />
               ) : meshData || meshes.length > 0 ? (
-                <motion.div
+                <div
                   key="mesh-viewer"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -1159,7 +1114,7 @@ function AppContent() {
                     meshes={viewerMeshes}
                     selectedMeshId={selectedMeshId}
                   />
-                </motion.div>
+                </div>
               ) : (
                 <MeshViewer 
                   key="empty-viewer"

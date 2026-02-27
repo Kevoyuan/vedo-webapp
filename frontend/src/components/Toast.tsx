@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { CheckCircle, XCircle, Warning, Info, X } from '@phosphor-icons/react'
+import { AnimatePresence, motion } from 'framer-motion'
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
 

@@ -1,5 +1,5 @@
-import { motion, AnimatePresence } from 'framer-motion'
-import { Spinner } from '@mantine/core'
+import { Loader } from '@mantine/core'
+import { AnimatePresence, motion } from 'framer-motion'
 
 interface OperationProgressBarProps {
   progress: number
@@ -37,7 +37,7 @@ export default function OperationProgressBar({
   }
 
   return (
-    <motion.div
+    <div
       initial={{ opacity: 0, height: 0 }}
       animate={{ opacity: 1, height: 'auto' }}
       exit={{ opacity: 0, height: 0 }}
@@ -46,9 +46,9 @@ export default function OperationProgressBar({
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           {status === 'started' ? (
-            <Spinner size={14} color="cyan" />
+            <Loader size={14} color="cyan" />
           ) : status === 'completed' ? (
-            <motion.div
+            <div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               className="w-3.5 h-3.5 rounded-full bg-emerald-500 flex items-center justify-center"
@@ -56,9 +56,9 @@ export default function OperationProgressBar({
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <path d="M2 5L4 7L8 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-            </motion.div>
+            </div>
           ) : (
-            <motion.div
+            <div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               className="w-3.5 h-3.5 rounded-full bg-red-500 flex items-center justify-center"
@@ -66,7 +66,7 @@ export default function OperationProgressBar({
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <path d="M3 3L7 7M7 3L3 7" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
-            </motion.div>
+            </div>
           )}
           <span className="text-xs text-gray-300">{message}</span>
         </div>
@@ -82,7 +82,7 @@ export default function OperationProgressBar({
       
       {/* Progress bar */}
       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-        <motion.div
+        <div
           className={`h-full bg-gradient-to-r ${getStatusColor()} rounded-full`}
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
@@ -94,7 +94,7 @@ export default function OperationProgressBar({
       <div className="flex justify-end mt-1">
         <span className="text-[10px] text-gray-500">{Math.round(progress)}%</span>
       </div>
-    </motion.div>
+    </div>
   )
 }
 

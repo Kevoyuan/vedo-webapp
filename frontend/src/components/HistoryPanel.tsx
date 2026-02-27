@@ -1,6 +1,6 @@
 import { ActionIcon, Tooltip, Text, Group, ScrollArea, Badge, Stack, Button, Divider } from '@mantine/core'
-import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowClockwise, ArrowCounterClockwise, Trash, History } from '@phosphor-icons/react'
+import { ArrowClockwise, ArrowCounterClockwise, Trash, ClockCounterClockwise } from '@phosphor-icons/react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { HistoryEntry, OPERATION_LABELS, OperationType } from '../hooks/useHistory'
 
 interface HistoryPanelProps {
@@ -58,7 +58,7 @@ export default function HistoryPanel({
           onClick={onToggle}
           className="transition-all duration-200 hover:bg-white/5"
         >
-          <History size={20} />
+          <ClockCounterClockwise size={20} />
         </ActionIcon>
       </Tooltip>
     )
@@ -69,7 +69,7 @@ export default function HistoryPanel({
       {/* Header */}
       <Group justify="space-between" mb="md">
         <Group gap="xs">
-          <History size={18} className="text-cyan-400" />
+          <ClockCounterClockwise size={18} className="text-cyan-400" />
           <Text size="sm" fw={600}>History</Text>
           <Badge size="xs" variant="dot" color="gray">
             {history.length}/{50}
@@ -124,7 +124,7 @@ export default function HistoryPanel({
         </Group>
       </Group>
 
-      {/* History List */}
+      {/* ClockCounterClockwise List */}
       <ScrollArea h={200} offsetScrollbars>
         <Stack gap={4}>
           <AnimatePresence mode="popLayout">
@@ -134,7 +134,7 @@ export default function HistoryPanel({
               </Text>
             ) : (
               history.map((entry, index) => (
-                <motion.div
+                <div
                   key={entry.id}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -168,7 +168,7 @@ export default function HistoryPanel({
                       {formatTime(entry.timestamp)}
                     </Text>
                   </Group>
-                </motion.div>
+                </div>
               ))
             )}
           </AnimatePresence>

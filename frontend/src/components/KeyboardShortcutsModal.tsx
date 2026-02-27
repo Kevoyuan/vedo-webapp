@@ -1,6 +1,6 @@
 import { Modal, Text, Group, Kbd, Stack } from '@mantine/core'
-import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 
 interface ShortcutItem {
   key: string
@@ -64,7 +64,7 @@ export default function KeyboardShortcutsModal({ opened, onClose }: KeyboardShor
       <Stack gap="xs">
         <AnimatePresence>
           {shortcuts.map((shortcut, index) => (
-            <motion.div
+            <div
               key={shortcut.key}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
@@ -86,7 +86,7 @@ export default function KeyboardShortcutsModal({ opened, onClose }: KeyboardShor
                   {shortcut.key}
                 </Kbd>
               </Group>
-            </motion.div>
+            </div>
           ))}
         </AnimatePresence>
       </Stack>

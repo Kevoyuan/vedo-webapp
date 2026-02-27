@@ -10,8 +10,8 @@ import {
   CheckCircle, 
   XCircle,
   Info,
-  ChevronDown,
-  ChevronUp
+  CaretDown,
+  CaretUp
 } from '@phosphor-icons/react'
 
 interface QualityMetrics {
@@ -140,7 +140,7 @@ export default function AnalysisPanel({ qualityData, curvatureData, onClear }: P
                     Curvature ({curvatureData.method || 'gaussian'})
                   </Text>
                 </Group>
-                {curvatureOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                {curvatureOpen ? <CaretUp size={14} /> : <CaretDown size={14} />}
               </Group>
               
               <Collapse in={curvatureOpen}>
@@ -201,7 +201,7 @@ export default function AnalysisPanel({ qualityData, curvatureData, onClear }: P
                   <ChartPie size={14} className="text-teal-400" />
                   <Text size="xs" fw={600} c="dimmed">Quality Metrics</Text>
                 </Group>
-                {qualityOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                {qualityOpen ? <CaretUp size={14} /> : <CaretDown size={14} />}
               </Group>
               
               <Collapse in={qualityOpen}>
