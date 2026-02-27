@@ -183,9 +183,12 @@ async def import_mesh(file: UploadFile = File(...)):
     file_path = MESH_DIR / f"{mesh_id}_{file.filename}"
     try:
         content = await file.read()
-        # Run blocking file write in thread pool
+        # Run blocking file write in thread pool - with proper file handle closing
+        def write_file():
+            with open(file_path, "wb") as f:
+                f.write(content)
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(_executor, lambda: open(file_path, "wb").write(content))
+        await loop.run_in_executor(_executor, write_file)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
     
@@ -196,7 +199,13 @@ async def import_mesh(file: UploadFile = File(...)):
         
         # Get bounds safely - run in thread pool
         def get_bounds():
-            return mesh.bounds() or [0, 0, 0, 0, 0, 0]
+            bounds = mesh.bounds()
+            if bounds is None:
+                return [0, 0, 0, 0, 0, 0]
+            # Convert numpy array to list if needed
+            if hasattr(bounds, 'tolist'):
+                return bounds.tolist()
+            return list(bounds)
         
         bounds = await loop.run_in_executor(_executor, get_bounds)
         
@@ -269,12 +278,18 @@ async def get_mesh_info(mesh_id: str):
         mesh = await loop.run_in_executor(_executor, vedo.load, file_path)
         
         # Get bounds in thread pool
-        bounds = await loop.run_in_executor(_executor, lambda: mesh.bounds() or [0, 0, 0, 0, 0, 0])
-        
+        def get_bounds_safe():
+            b = mesh.bounds()
+            if b is None:
+                return [0, 0, 0, 0, 0, 0]
+            return b.tolist() if hasattr(b, 'tolist') else list(b)
+
+        bounds = await loop.run_in_executor(_executor, get_bounds_safe)
+
         # Get center of mass if available
         def get_com():
             return list(mesh.centerOfMass()) if hasattr(mesh, 'centerOfMass') else None
-        
+
         com = await loop.run_in_executor(_executor, get_com)
         
         return MeshMetadata(
@@ -327,12 +342,18 @@ async def analyze_mesh(mesh_id: str, compute_curvature: bool = False):
     try:
         loop = asyncio.get_event_loop()
         mesh = await loop.run_in_executor(_executor, vedo.load, mesh_data["path"])
-        
-        bounds = await loop.run_in_executor(_executor, lambda: mesh.bounds() or [0, 0, 0, 0, 0, 0])
-        
+
+        def get_bounds_safe():
+            b = mesh.bounds()
+            if b is None:
+                return [0, 0, 0, 0, 0, 0]
+            return b.tolist() if hasattr(b, 'tolist') else list(b)
+
+        bounds = await loop.run_in_executor(_executor, get_bounds_safe)
+
         def get_com():
             return list(mesh.centerOfMass()) if hasattr(mesh, 'centerOfMass') else None
-        
+
         com = await loop.run_in_executor(_executor, get_com)
         
         result = AnalysisResult(
