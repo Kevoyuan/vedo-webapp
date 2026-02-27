@@ -40,6 +40,7 @@ export default defineConfig({
       '@react-three/fiber',
       '@react-three/drei',
       '@mantine/core',
+      'framer-motion',
     ],
     // Exclude web workers from optimization
     exclude: [],
