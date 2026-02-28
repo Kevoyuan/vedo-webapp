@@ -26,21 +26,21 @@ import { OperationProgressList } from './components/OperationProgressBar'
 import * as api from './lib/api'
 import * as storage from './lib/storage'
 import StoragePanel from './components/StoragePanel'
-import { 
-  Project, 
-  ProjectCamera, 
-  ProjectSettings, 
-  initDB, 
-  autoSaveToLocalStorage, 
+import {
+  Project,
+  ProjectCamera,
+  ProjectSettings,
+  initDB,
+  autoSaveToLocalStorage,
   loadAutoSave,
-  saveProject as saveProjectToDB 
+  saveProject as saveProjectToDB
 } from './lib/projectStorage'
 import './index.css'
 
 // Responsive hook
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(false)
-  
+
   useEffect(() => {
     const media = window.matchMedia(query)
     if (media.matches !== matches) {
@@ -50,23 +50,23 @@ function useMediaQuery(query: string) {
     media.addEventListener('change', listener)
     return () => media.removeEventListener('change', listener)
   }, [matches, query])
-  
+
   return matches
 }
 
 // Bottom Sheet Component for Mobile
-function BottomSheet({ 
-  open, 
+function BottomSheet({
+  open,
   onToggle,
-  children 
-}: { 
+  children
+}: {
   open: boolean
   onToggle: () => void
-  children: React.ReactNode 
+  children: React.ReactNode
 }) {
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     const startY = e.touches[0].clientY
-    
+
     const handleMove = (moveEvent: TouchEvent) => {
       const diff = startY - moveEvent.touches[0].clientY
       if (diff > 100) {
@@ -74,17 +74,17 @@ function BottomSheet({
         document.removeEventListener('touchmove', handleMove)
       }
     }
-    
+
     document.addEventListener('touchmove', handleMove, { passive: true })
   }, [onToggle])
 
   return (
     <>
-      <div 
+      <div
         className={`bottom-sheet-overlay ${open ? 'open' : ''}`}
         onClick={onToggle}
       />
-      <div 
+      <div
         className={`bottom-sheet ${open ? 'open' : ''}`}
         onTouchMove={handleTouchMove}
         initial={{ y: '100%' }}
@@ -103,7 +103,7 @@ function BottomSheet({
 // Mobile Toggle Button
 function MobileToggleButton({ open, onClick }: { open: boolean; onClick: () => void }) {
   return (
-    <button 
+    <button
       className="mobile-controls-toggle"
       onClick={onClick}
       aria-label={open ? 'Close controls' : 'Open controls'}
@@ -161,7 +161,7 @@ function AppContent() {
   const [meshes, setMeshes] = useState<MeshData[]>([])
   const [selectedMeshId, setSelectedMeshId] = useState<string | null>(null)
   const [meshVisualizations, setMeshVisualizations] = useState<Record<string, { vertices: number[][], faces: number[][] }>>({})
-  
+
   // Legacy single mesh state (for backwards compatibility)
   const [meshData, setMeshData] = useState<MeshData | null>(null)
   const [loading, setLoading] = useState(false)
@@ -171,11 +171,11 @@ function AppContent() {
   const [viewerSettings, setViewerSettings] = useState<ViewerSettings>(defaultViewerSettings)
   const [analysisResult, setAnalysisResult] = useState<any>(null)
   const { showToast } = useToast()
-  
+
   // Storage/Project state
   const [storagePanelOpen, setStoragePanelOpen] = useState(false)
   const [currentProjectName, setCurrentProjectName] = useState<string | null>(null)
-  
+
   // Project management state
   const [currentProject, setCurrentProject] = useState<Project | null>(null)
   const [projectCamera, setProjectCamera] = useState<ProjectCamera>({
@@ -183,21 +183,21 @@ function AppContent() {
     target: [0, 0, 0]
   })
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  
+
   // Initialize IndexedDB
   useEffect(() => {
     initDB().catch(err => console.error('Failed to init project DB:', err))
   }, [])
-  
+
   // Auto-save to localStorage when state changes (debounced)
   useEffect(() => {
     if (!currentProject) return
-    
+
     // Debounce auto-save
     if (autoSaveTimeoutRef.current) {
       clearTimeout(autoSaveTimeoutRef.current)
     }
-    
+
     autoSaveTimeoutRef.current = setTimeout(() => {
       autoSaveToLocalStorage({
         currentProjectId: currentProject.id,
@@ -207,14 +207,14 @@ function AppContent() {
         camera: projectCamera
       })
     }, 2000) // Auto-save after 2 seconds of inactivity
-    
+
     return () => {
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current)
       }
     }
   }, [meshes, meshVisualizations, viewerSettings, projectCamera, currentProject])
-  
+
   // Handle project change
   const handleProjectChange = useCallback((project: Project | null) => {
     setCurrentProject(project)
@@ -224,14 +224,14 @@ function AppContent() {
       setCurrentProjectName(null)
     }
   }, [])
-  
+
   // Quick save handler (Ctrl+S)
   const handleQuickSave = useCallback(async () => {
     if (!currentProject) {
       showToast('info', 'Create or load a project first')
       return
     }
-    
+
     try {
       const projectMeshes = meshes.map(mesh => ({
         id: mesh.id,
@@ -260,49 +260,49 @@ function AppContent() {
       showToast('error', 'Failed to save project')
     }
   }, [currentProject, meshes, meshVisualizations, projectCamera, viewerSettings, showToast])
-  
+
   // Online status tracking
   const { isOnline, wasOffline, checkConnection } = useOnlineStatus()
-  
+
   // Operation progress tracking
-  const { 
-    operations, 
-    startOperation, 
-    updateProgress, 
-    completeOperation, 
+  const {
+    operations,
+    startOperation,
+    updateProgress,
+    completeOperation,
     failOperation,
-    clearOperation 
+    clearOperation
   } = useOperationProgress()
-  
+
   // Convert operations map to array for rendering
   const operationsList = useMemo(() => {
     return Array.from(operations.values())
   }, [operations])
-  
+
   // Responsive state
   const isMobile = useMediaQuery('(max-width: 767px)')
   const isTablet = useMediaQuery('(min-width: 768px) and (max-width: 1023px)')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(isTablet)
   const [bottomSheetOpen, setBottomSheetOpen] = useState(false)
-  
+
   // Auto-collapse sidebar on tablet
   useEffect(() => {
     if (isTablet) {
       setSidebarCollapsed(true)
     }
   }, [isTablet])
-  
+
   // History management
-  const { 
-    canUndo, 
-    canRedo, 
-    history, 
-    currentIndex, 
-    pushHistory, 
-    undo, 
-    redo, 
+  const {
+    canUndo,
+    canRedo,
+    history,
+    currentIndex,
+    pushHistory,
+    undo,
+    redo,
     clearHistory,
-    getCurrentMeshData 
+    getCurrentMeshData
   } = useHistory()
 
   // Undo handler
@@ -329,7 +329,7 @@ function AppContent() {
 
   // Keyboard shortcuts
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
-  
+
   const shortcuts = [
     // General
     {
@@ -352,7 +352,7 @@ function AppContent() {
       },
       description: 'Close modal'
     },
-    
+
     // Undo/Redo
     {
       key: 'z',
@@ -380,7 +380,7 @@ function AppContent() {
       ctrl: true,
       description: 'Save project'
     },
-    
+
     // View toggles
     {
       key: 'h',
@@ -406,24 +406,24 @@ function AppContent() {
       handler: () => setViewerSettings(prev => ({ ...prev, showAxes: !prev.showAxes })),
       description: 'Toggle axes'
     },
-    
+
     // Transform modes
     {
       key: '1',
-      handler: () => {}, // Rotate mode - handled by toolbar
+      handler: () => { }, // Rotate mode - handled by toolbar
       description: 'Rotate mode'
     },
     {
       key: '2',
-      handler: () => {}, // Scale mode - handled by toolbar
+      handler: () => { }, // Scale mode - handled by toolbar
       description: 'Scale mode'
     },
     {
       key: '3',
-      handler: () => {}, // Translate mode - handled by toolbar
+      handler: () => { }, // Translate mode - handled by toolbar
       description: 'Translate mode'
     },
-    
+
     // Camera presets
     {
       key: '5',
@@ -450,32 +450,32 @@ function AppContent() {
       handler: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'isometric' })),
       description: 'Isometric view'
     },
-    
+
     // Display
     {
       key: 'w',
-      handler: () => setViewerSettings(prev => ({ 
-        ...prev, 
-        viewMode: prev.viewMode === 'wireframe' ? 'solid' : 'wireframe' 
+      handler: () => setViewerSettings(prev => ({
+        ...prev,
+        viewMode: prev.viewMode === 'wireframe' ? 'solid' : 'wireframe'
       })),
       description: 'Toggle wireframe'
     },
     {
       key: 'x',
-      handler: () => setViewerSettings(prev => ({ 
-        ...prev, 
-        viewMode: prev.viewMode === 'xray' ? 'solid' : 'xray' 
+      handler: () => setViewerSettings(prev => ({
+        ...prev,
+        viewMode: prev.viewMode === 'xray' ? 'solid' : 'xray'
       })),
       description: 'Toggle X-Ray mode'
     },
     {
       key: '+',
-      handler: () => {}, // Zoom in - handled by viewer
+      handler: () => { }, // Zoom in - handled by viewer
       description: 'Zoom in'
     },
     {
       key: '-',
-      handler: () => {}, // Zoom out - handled by viewer
+      handler: () => { }, // Zoom out - handled by viewer
       description: 'Zoom out'
     },
     {
@@ -483,7 +483,7 @@ function AppContent() {
       handler: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'free' })),
       description: 'Reset camera'
     },
-    
+
     // Error handling
     {
       key: 'r',
@@ -494,7 +494,7 @@ function AppContent() {
       },
       description: 'Retry'
     },
-    
+
     // Delete mesh
     {
       key: 'Delete',
@@ -523,17 +523,17 @@ function AppContent() {
     // General
     { id: 'shortcuts', label: 'Keyboard Shortcuts', description: 'View all shortcuts', shortcut: '?', category: 'General', action: () => setShortcutsModalOpen(true) },
     { id: 'command-palette', label: 'Command Palette', shortcut: 'Ctrl+K', category: 'General', action: () => setCommandPaletteOpen(true) },
-    
+
     // File
     { id: 'undo', label: 'Undo', shortcut: 'Ctrl+Z', category: 'File', action: handleUndo },
     { id: 'redo', label: 'Redo', shortcut: 'Ctrl+Shift+Z', category: 'File', action: handleRedo },
-    
+
     // View
     { id: 'toggle-sidebar', label: 'Toggle Sidebar', shortcut: 'Space', category: 'View', action: () => setSidebarCollapsed(prev => !prev) },
     { id: 'toggle-history', label: 'Toggle History Panel', shortcut: 'H', category: 'View', action: () => setHistoryPanelOpen(prev => !prev) },
     { id: 'toggle-grid', label: 'Toggle Grid', shortcut: 'G', category: 'View', action: () => setViewerSettings(prev => ({ ...prev, showGrid: !prev.showGrid })) },
     { id: 'toggle-axes', label: 'Toggle Axes', shortcut: 'A', category: 'View', action: () => setViewerSettings(prev => ({ ...prev, showAxes: !prev.showAxes })) },
-    
+
     // Camera
     { id: 'camera-free', label: 'Camera: Free', shortcut: '5', category: 'Camera', action: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'free' })) },
     { id: 'camera-top', label: 'Camera: Top', shortcut: '6', category: 'Camera', action: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'top' })) },
@@ -541,11 +541,11 @@ function AppContent() {
     { id: 'camera-side', label: 'Camera: Side', shortcut: '8', category: 'Camera', action: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'side' })) },
     { id: 'camera-iso', label: 'Camera: Isometric', shortcut: '9', category: 'Camera', action: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'isometric' })) },
     { id: 'camera-reset', label: 'Reset Camera', shortcut: '0', category: 'Camera', action: () => setViewerSettings(prev => ({ ...prev, cameraPreset: 'free' })) },
-    
+
     // Display
     { id: 'wireframe', label: 'Toggle Wireframe', shortcut: 'W', category: 'Display', action: () => setViewerSettings(prev => ({ ...prev, viewMode: prev.viewMode === 'wireframe' ? 'solid' : 'wireframe' })) },
     { id: 'xray', label: 'Toggle X-Ray Mode', shortcut: 'X', category: 'Display', action: () => setViewerSettings(prev => ({ ...prev, viewMode: prev.viewMode === 'xray' ? 'solid' : 'xray' })) },
-    
+
     // Mesh
     ...(selectedMeshId ? [{ id: 'delete-mesh', label: 'Delete Selected Mesh', shortcut: 'Del', category: 'Mesh', action: () => handleDeleteMesh(selectedMeshId) }] : []),
   ], [handleUndo, handleRedo, selectedMeshId, sidebarCollapsed, viewerSettings])
@@ -556,7 +556,7 @@ function AppContent() {
       setError(event.message)
       showToast('error', 'An unexpected error occurred')
     }
-    
+
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       setError(event.reason?.message || 'Request failed')
       showToast('error', 'Request failed. Please try again.')
@@ -580,18 +580,18 @@ function AppContent() {
     try {
       // Get visualization data
       const vizData = await api.getMeshVisualize(data.id)
-      
+
       // Add to meshes list
       setMeshes(prev => [...prev, data])
       setMeshVisualizations(prev => ({
         ...prev,
         [data.id]: vizData
       }))
-      
+
       // Also set as current for backwards compatibility
       setMeshData(data)
       setSelectedMeshId(data.id)
-      
+
       setError(null)
       pushHistory('import', data, `Imported: ${data.id}`)
       showToast('success', `Mesh "${data.filename || data.id}" loaded successfully`)
@@ -628,12 +628,12 @@ function AppContent() {
         delete newViz[id]
         return newViz
       })
-      
+
       if (selectedMeshId === id) {
         setSelectedMeshId(null)
         setMeshData(null)
       }
-      
+
       showToast('info', 'Mesh deleted')
     } catch (err) {
       showToast('error', 'Failed to delete mesh')
@@ -652,23 +652,23 @@ function AppContent() {
 
   const handleMergeMeshes = useCallback(async (ids: string[]) => {
     if (ids.length < 2) return
-    
+
     try {
       setLoading(true)
       const merged = await api.mergeMeshes(ids, 'merge', 'merged_mesh')
-      
+
       // Get visualization for merged mesh
       const vizData = await api.getMeshVisualize(merged.id)
-      
+
       setMeshes(prev => [...prev, merged])
       setMeshVisualizations(prev => ({
         ...prev,
         [merged.id]: vizData
       }))
-      
+
       setSelectedMeshId(merged.id)
       setMeshData(merged)
-      
+
       showToast('success', `Merged ${ids.length} meshes`)
     } catch (err: any) {
       showToast('error', err.message || 'Failed to merge meshes')
@@ -790,37 +790,37 @@ function AppContent() {
   return (
     <MantineProvider theme={theme} defaultColorScheme="dark">
       {/* Offline indicator */}
-      <OfflineIndicator 
-        isOnline={isOnline} 
+      <OfflineIndicator
+        isOnline={isOnline}
         wasOffline={wasOffline}
         onRetry={checkConnection}
       />
-      
+
       <div className="min-h-screen bg-[#0a0a0b] text-white overflow-hidden">
         {/* Operation progress indicators */}
         {operationsList.length > 0 && (
           <div className="fixed bottom-6 left-6 z-40 max-w-sm">
-            <OperationProgressList 
+            <OperationProgressList
               operations={operationsList}
               onCancel={clearOperation}
             />
           </div>
         )}
-        
+
         {/* Header - Premium asymmetric design */}
         <header className="h-16 glass border-b border-white/5 flex items-center justify-between px-6 relative overflow-hidden">
           {/* Decorative gradient orbs */}
           <div className="absolute top-0 right-32 w-40 h-40 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute bottom-0 left-1/4 w-24 h-24 bg-purple-500/3 rounded-full blur-2xl pointer-events-none" />
-          
-          <div 
+
+          <div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             className="flex items-center gap-4 relative z-10"
           >
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-cyan-600/10 border border-cyan-500/20 flex items-center justify-center shadow-glow-sm">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-cyan-400">
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
               </svg>
             </div>
             <div>
@@ -830,7 +830,7 @@ function AppContent() {
           </div>
 
           {/* Status indicator & shortcuts button */}
-          <div 
+          <div
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             className="flex items-center gap-4 relative z-10"
@@ -865,7 +865,7 @@ function AppContent() {
               title="Storage & Projects"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
               </svg>
             </button>
             {currentProjectName && (
@@ -879,12 +879,12 @@ function AppContent() {
         <main className="flex h-[calc(100vh-4rem)]">
           {/* Mobile Toggle Button */}
           {isMobile && meshData && (
-            <MobileToggleButton 
-              open={bottomSheetOpen} 
-              onClick={() => setBottomSheetOpen(!bottomSheetOpen)} 
+            <MobileToggleButton
+              open={bottomSheetOpen}
+              onClick={() => setBottomSheetOpen(!bottomSheetOpen)}
             />
           )}
-          
+
           {/* Sidebar - Premium asymmetric layout */}
           {/* Tablet: collapsed by default, Mobile: hidden (bottom sheet instead) */}
           <aside className={`
@@ -899,23 +899,19 @@ function AppContent() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.05 }}
             >
-              {loading ? (
-                <FileUploaderSkeleton />
-              ) : (
-                <FileUploader 
-                  onUpload={handleUploadSuccess} 
-                  loading={loading}
-                  setLoading={setLoading}
-                  onError={(msg) => {
-                    setError(msg)
-                    showToast('error', msg)
-                  }}
-                  onProgress={updateProgress}
-                  onOperationComplete={completeOperation}
-                  onOperationFail={failOperation}
-                  startOperation={startOperation}
-                />
-              )}
+              <FileUploader
+                onUpload={handleUploadSuccess}
+                loading={loading}
+                setLoading={setLoading}
+                onError={(msg) => {
+                  setError(msg)
+                  showToast('error', msg)
+                }}
+                onProgress={updateProgress}
+                onOperationComplete={completeOperation}
+                onOperationFail={failOperation}
+                startOperation={startOperation}
+              />
             </div>
 
             {/* Project Manager */}
@@ -924,7 +920,7 @@ function AppContent() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.06 }}
             >
-              <ProjectManager 
+              <ProjectManager
                 currentProject={currentProject}
                 onProjectChange={handleProjectChange}
                 onLoadProject={handleLoadProject}
@@ -944,7 +940,7 @@ function AppContent() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.08 }}
                 >
-                  <MeshListPanel 
+                  <MeshListPanel
                     meshes={meshes}
                     selectedMeshId={selectedMeshId}
                     onSelectMesh={handleSelectMesh}
@@ -998,8 +994,8 @@ function AppContent() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.15 }}
                 >
-                  <Toolbar 
-                    meshId={meshData.id} 
+                  <Toolbar
+                    meshId={meshData.id}
                     onUpdate={handleTransformSuccess}
                     onAnalysisResult={setAnalysisResult}
                     canUndo={canUndo}
@@ -1028,7 +1024,7 @@ function AppContent() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
                 >
-                  <AnalysisPanel 
+                  <AnalysisPanel
                     qualityData={analysisResult.mesh_id ? analysisResult : null}
                     curvatureData={analysisResult.curvature || analysisResult.method ? analysisResult : null}
                     onClear={() => setAnalysisResult(null)}
@@ -1044,7 +1040,7 @@ function AppContent() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <ViewerControls 
+                <ViewerControls
                   settings={viewerSettings}
                   onSettingsChange={handleViewerSettingsChange}
                   onScreenshot={() => {
@@ -1073,7 +1069,7 @@ function AppContent() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.25 }}
               >
-                <HistoryPanel 
+                <HistoryPanel
                   history={history}
                   currentIndex={currentIndex}
                   canUndo={canUndo}
@@ -1094,7 +1090,7 @@ function AppContent() {
               {loading ? (
                 <ViewerSkeleton key="loading-viewer" />
               ) : error ? (
-                <ErrorState 
+                <ErrorState
                   key="error-viewer"
                   message={error}
                   onRetry={handleRetry}
@@ -1106,8 +1102,8 @@ function AppContent() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                 >
-                  <MeshViewer 
-                    meshData={meshData} 
+                  <MeshViewer
+                    meshData={meshData}
                     loading={loading}
                     settings={viewerSettings}
                     onSettingsChange={handleViewerSettingsChange}
@@ -1116,9 +1112,9 @@ function AppContent() {
                   />
                 </div>
               ) : (
-                <MeshViewer 
+                <MeshViewer
                   key="empty-viewer"
-                  meshData={null} 
+                  meshData={null}
                   loading={loading}
                   settings={viewerSettings}
                   onSettingsChange={handleViewerSettingsChange}
@@ -1130,38 +1126,34 @@ function AppContent() {
 
         {/* Mobile Bottom Sheet - Shows controls on mobile */}
         {isMobile && (
-          <BottomSheet 
-            open={bottomSheetOpen} 
+          <BottomSheet
+            open={bottomSheetOpen}
             onToggle={() => setBottomSheetOpen(!bottomSheetOpen)}
           >
             <div className="flex flex-col gap-4">
               {/* File uploader in bottom sheet */}
               <div className="mobile-p-3">
-                {loading ? (
-                  <FileUploaderSkeleton />
-                ) : (
-                  <FileUploader 
-                    onUpload={(data) => {
-                      handleUploadSuccess(data)
-                      setBottomSheetOpen(false)
-                    }} 
-                    loading={loading}
-                    setLoading={setLoading}
-                  />
-                )}
+                <FileUploader
+                  onUpload={(data) => {
+                    handleUploadSuccess(data)
+                    setBottomSheetOpen(false)
+                  }}
+                  loading={loading}
+                  setLoading={setLoading}
+                />
               </div>
-              
+
               {/* Mesh info in bottom sheet */}
               {meshData && (
                 <div className="mobile-p-3">
                   <MeshInfo data={meshData} />
                 </div>
               )}
-              
+
               {/* Viewer controls in bottom sheet */}
               {meshData && (
                 <div className="mobile-p-3">
-                  <ViewerControls 
+                  <ViewerControls
                     settings={viewerSettings}
                     onSettingsChange={handleViewerSettingsChange}
                     onScreenshot={() => {
@@ -1185,12 +1177,12 @@ function AppContent() {
           </BottomSheet>
         )}
 
-        <KeyboardShortcutsModal 
-          opened={shortcutsModalOpen} 
-          onClose={() => setShortcutsModalOpen(false)} 
+        <KeyboardShortcutsModal
+          opened={shortcutsModalOpen}
+          onClose={() => setShortcutsModalOpen(false)}
         />
 
-        <CommandPalette 
+        <CommandPalette
           opened={commandPaletteOpen}
           onClose={() => setCommandPaletteOpen(false)}
           commands={commands}
